@@ -49,11 +49,14 @@ $(BUILD)/VirtioRand: $(BUILD)/VirtioRand.o $(BUILD)/VirtioRand_info.o
 	   $(addprefix -L,$(KMOD_LIB_DIR)) -lkmodc++ -lkmod -lcc_kext
 
 # perl rather than sed: 10.1's sed cannot put a file's lines into a replacement.
+# The comments of Info.plist.in are dropped from the built plist: BootX, which loads the kexts a boot
+# needs before the root is mounted, ends a <dict> at an XML comment, and then loads nothing of the kext
+# (live, VirtioBlock on 10.0.4 booting from virtio-blk, 2026-10-03; BootX-36 drivers.c ParseTagList).
 $(KEXT): $(BUILD)/VirtioRand Info.plist.in libraries-$(ABI).xml
 	rm -rf $(KEXT)
 	mkdir -p $(KEXT)/Contents/MacOS
 	cp $(BUILD)/VirtioRand $(KEXT)/Contents/MacOS/VirtioRand
-	perl -pe 's/\@VERSION\@/$(VERSION)/g; if (/\@LIBRARIES\@/) { open(L, "libraries-$(ABI).xml") or die; local $$/; $$_ = <L>; }' Info.plist.in > $(KEXT)/Contents/Info.plist
+	perl -pe 's/\@VERSION\@/$(VERSION)/g; if (/\@LIBRARIES\@/) { open(L, "libraries-$(ABI).xml") or die; local $$/; $$_ = <L>; }' Info.plist.in | perl -0pe 's/[ \t]*<!--.*?-->\n?//gs' > $(KEXT)/Contents/Info.plist
 
 clean:
 	rm -rf build
