@@ -14,9 +14,18 @@ extern "C" {
 #include <sys/types.h>
 #include <sys/uio.h>
 
+#ifdef VIRTIORAND_DEVICE
+#include <sys/conf.h>
+#include <sys/errno.h>
+#include <miscfs/devfs/devfs.h>
+/* 10.0's headers declare these for the kernel only. */
+extern int uiomove(caddr_t cp, int n, struct uio *uio);
+extern int seltrue(dev_t dev, int flag, struct proc *p);
+#else
 /* The kernel's write routine of /dev/random (bsd/dev/random/randomdev.c): mixes what the uio holds
  * into Yarrow, under its mutex, and forces a reseed. dev and ioflag are not looked at. */
 extern int random_write(dev_t dev, struct uio *uio, int ioflag);
+#endif
 }
 
 #define super IOService
@@ -167,6 +176,118 @@ void io_virtio_VirtioRand::request()
 
 /* Mixes len bytes of the buffer into the kernel's generator, as a write to /dev/random would, and
  * wipes the buffer: nothing keeps the bytes around once they are in. */
+#ifdef VIRTIORAND_DEVICE
+/* Adds len bytes of the buffer to the pool, as far as there is room, and wipes the buffer. */
+void io_virtio_VirtioRand::feed(UInt32 len)
+{
+    UInt32 k;
+
+    IOSimpleLockLock(fPoolLock);
+    for (k = 0; k < len && fPoolLen < kPoolSize; k++) {
+        fPool[(fPoolHead + fPoolLen) % kPoolSize] = fBuf[k];
+        fPoolLen++;
+    }
+    IOSimpleLockUnlock(fPoolLock);
+    bzero(fBuf, kBufferSize);
+    fBytes += k;
+}
+
+/* A read of /dev/random or /dev/urandom: bytes out of the pool, waiting for the device while it is
+ * empty (the timer refills it every few milliseconds while it is not full). Bytes given out are
+ * wiped from the pool. */
+int io_virtio_VirtioRand::devRead(struct uio *uio)
+{
+    UInt8 tmp[64];
+    int waited = 0, err;
+
+    while (uio->uio_resid > 0) {
+        UInt32 n = 0, want = uio->uio_resid > (int) sizeof(tmp) ? sizeof(tmp) : (UInt32) uio->uio_resid;
+
+        IOSimpleLockLock(fPoolLock);
+        while (n < want && fPoolLen > 0) {
+            tmp[n++] = fPool[fPoolHead];
+            fPool[fPoolHead] = 0;
+            fPoolHead = (fPoolHead + 1) % kPoolSize;
+            fPoolLen--;
+        }
+        IOSimpleLockUnlock(fPoolLock);
+        if (n == 0) {
+            if (fStopping || waited >= 10000)
+                return EIO;         /* the device is gone, or has stopped answering */
+            IOSleep(10);
+            waited += 10;
+            continue;
+        }
+        waited = 0;
+        err = uiomove((caddr_t) tmp, n, uio);
+        bzero(tmp, sizeof(tmp));
+        if (err)
+            return err;
+    }
+    return 0;
+}
+
+static io_virtio_VirtioRand *gRand;   /* the instance the nodes read from */
+
+static int randOpenClose(dev_t, int, int, struct proc *) { return 0; }
+
+static int randRead(dev_t, struct uio *uio, int)
+{
+    return gRand ? gRand->devRead(uio) : ENXIO;
+}
+
+/* Taken and dropped: what a process writes is not the host's to know, and adds nothing to it. */
+static int randWrite(dev_t, struct uio *uio, int)
+{
+    char sink[64];
+    int err = 0;
+
+    while (uio->uio_resid > 0 && !err) {
+        int n = uio->uio_resid > (int) sizeof(sink) ? (int) sizeof(sink) : uio->uio_resid;
+
+        err = uiomove(sink, n, uio);
+    }
+    bzero(sink, sizeof(sink));
+    return err;
+}
+
+static struct cdevsw gRandSW = {
+    (open_close_fcn_t *) randOpenClose, (open_close_fcn_t *) randOpenClose,
+    (read_write_fcn_t *) randRead,      (read_write_fcn_t *) randWrite,
+    eno_ioctl, eno_stop, eno_reset, 0,
+    (select_fcn_t *) seltrue, eno_mmap, eno_strat, eno_getc, eno_putc, 0
+};
+
+bool io_virtio_VirtioRand::devPublish()
+{
+    if (gRand)
+        return false;       /* a second device: the first one serves */
+    fMajor = cdevsw_add(-1, &gRandSW);
+    if (fMajor < 0) {
+        IOLog("VirtioRand: no character device major left\n");
+        return false;
+    }
+    gRand = this;
+    fNodeRandom  = devfs_make_node(makedev(fMajor, 0), DEVFS_CHAR, UID_ROOT, GID_WHEEL, 0666, "random");
+    fNodeURandom = devfs_make_node(makedev(fMajor, 1), DEVFS_CHAR, UID_ROOT, GID_WHEEL, 0666, "urandom");
+    IOLog("VirtioRand: /dev/random and /dev/urandom (major %d), served from the device\n", fMajor);
+    return true;
+}
+
+void io_virtio_VirtioRand::devUnpublish()
+{
+    if (gRand != this)
+        return;
+    if (fNodeRandom)
+        devfs_remove(fNodeRandom);
+    if (fNodeURandom)
+        devfs_remove(fNodeURandom);
+    fNodeRandom = fNodeURandom = 0;
+    cdevsw_remove(fMajor, &gRandSW);
+    fMajor = -1;
+    gRand = 0;
+}
+#else
 void io_virtio_VirtioRand::feed(UInt32 len)
 {
     struct iovec iov;
@@ -194,6 +315,7 @@ void io_virtio_VirtioRand::feed(UInt32 len)
     fFeedFailed = false;
     fBytes += len;
 }
+#endif
 
 void io_virtio_VirtioRand::publishCounts()
 {
@@ -235,6 +357,10 @@ void io_virtio_VirtioRand::tick()
                 IOLog("VirtioRand: primed the generator with %d bytes from the device\n", (int) fBytes);
         } else
             delay = fIntervalMS;
+#ifdef VIRTIORAND_DEVICE
+        if (fPoolLen < kPoolSize)
+            delay = kPrimeMS;   /* the pool refills as fast as the device gives */
+#endif
     } else if (++fWaitTicks == kStuckTicks)
         IOLog("VirtioRand: the device has not answered for %d ms\n", kStuckTicks * kPollMS);
     fTimer->setTimeoutMS(delay);
@@ -263,6 +389,12 @@ bool io_virtio_VirtioRand::start(IOService *provider)
     if (!fPCI->open(this))
         goto fail;
 
+#ifdef VIRTIORAND_DEVICE
+    fMajor = -1;
+    fPoolLock = IOSimpleLockAlloc();
+    if (!fPoolLock)
+        goto fail;
+#endif
     fIntervalMS = kIntervalDefaultMS;
     interval = OSDynamicCast(OSNumber, getProperty("IntervalMS"));
     if (interval && interval->unsigned32BitValue() >= kIntervalMinMS)
@@ -281,6 +413,9 @@ bool io_virtio_VirtioRand::start(IOService *provider)
     IOLog("VirtioRand: I/O at 0x%x%s, request queue %d entries, %d bytes at a time every %d ms\n",
           fIOBase, fIO ? "" : " (through the bridge)", fNum, kBufferSize, (int) fIntervalMS);
     publishCounts();
+#ifdef VIRTIORAND_DEVICE
+    devPublish();
+#endif
     registerService();
     fTimer->setTimeoutMS(kPrimeMS);
     return true;
@@ -294,6 +429,9 @@ fail:
 void io_virtio_VirtioRand::stop(IOService *provider)
 {
     fStopping = true;
+#ifdef VIRTIORAND_DEVICE
+    devUnpublish();
+#endif
     if (fTimer)
         fTimer->cancelTimeout();
     if (fPCI && (fIO || fIOBase))
@@ -315,6 +453,10 @@ void io_virtio_VirtioRand::free()
         IOFreeContiguous(fRing, fRingSize);
     if (fBuf)
         IOFreeContiguous(fBuf, kPage);
+#ifdef VIRTIORAND_DEVICE
+    if (fPoolLock)
+        IOSimpleLockFree(fPoolLock);
+#endif
     if (fIO)
         fIO->release();
     if (fPCI)

@@ -19,7 +19,13 @@ KMOD_LIB_DIR   ?=
 CFLAGS = -arch ppc -fno-common -nostdinc -O2 -Wall -I$(KERNEL_HEADERS) -I$(KERNEL_HEADERS)/bsd \
          -fno-builtin -finline -fno-keep-inline-functions -force_cpusubtype_ALL -msoft-float -mlong-branch \
          -static -DKERNEL -DKERNEL_PRIVATE -DDRIVER_PRIVATE -DAPPLE -DNeXT \
-         -DVIRTIORAND_VERSION='"$(VERSION)"'
+         -DVIRTIORAND_VERSION='"$(VERSION)"' $(DEVICE_FLAGS)
+# RANDOM_DEVICE=1: the driver is /dev/random and /dev/urandom itself, for 10.0, which has neither
+# (and no random_write: "kld(): Undefined symbols: _random_write", live, 10.0's install CD).
+RANDOM_DEVICE ?= 0
+ifeq ($(RANDOM_DEVICE),1)
+DEVICE_FLAGS = -DVIRTIORAND_DEVICE
+endif
 CXXFLAGS_gcc2 = -fvtable-thunks -findirect-virtual-calls
 CXXFLAGS_gcc3 = -fapple-kext
 CXXFLAGS = $(CFLAGS) -fno-rtti -fno-exceptions -fcheck-new $(CXXFLAGS_$(ABI))

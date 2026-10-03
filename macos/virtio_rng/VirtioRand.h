@@ -30,6 +30,12 @@
  * with no unexported symbol: the generator's state and mutex are static in the kernel, and
  * random_write is identical in 10.1's and 10.2's, bar its mutex symbol's name (read off both).
  * The bytes are credited at eight bits each, as every write to /dev/random is.
+ *
+ * 10.0 has no /dev/random at all, and so no random_write: built with VIRTIORAND_DEVICE (make
+ * RANDOM_DEVICE=1), the driver is the device itself. It keeps a pool of the device's bytes topped
+ * up and serves it as /dev/random and /dev/urandom from a character device of its own (cdevsw_add,
+ * devfs nodes), both the same: the host's generator is the generator. Writes are taken and
+ * dropped. Without the virtio device there are no nodes, as on a stock 10.0.
  */
 
 #ifndef _GR_STEI_VIRTIORAND_H
@@ -38,6 +44,7 @@
 #include <IOKit/IOService.h>
 #include <IOKit/IOWorkLoop.h>
 #include <IOKit/IOTimerEventSource.h>
+#include <IOKit/IOLocks.h>
 #include <IOKit/pci/IOPCIDevice.h>
 
 /* A split virtqueue, legacy layout; see VirtioConsole.h. */
@@ -70,6 +77,13 @@ private:
     void     tick();
     void     feed(UInt32 len);
     void     publishCounts();
+#ifdef VIRTIORAND_DEVICE
+public:
+    int      devRead(struct uio *uio);
+private:
+    bool     devPublish();
+    void     devUnpublish();
+#endif
 
     static void tickAction(OSObject *owner, IOTimerEventSource *src);
 
@@ -109,6 +123,16 @@ private:
     UInt32                        fWaitTicks;   /* ticks the pending request has waited */
     UInt32                        fRequests;    /* completed requests, */
     UInt32                        fBytes;       /* and the bytes they gave the generator */
+#ifdef VIRTIORAND_DEVICE
+    enum { kPoolSize = 4096 };
+    UInt8                         fPool[kPoolSize]; /* what the device gave and no reader took yet */
+    UInt32                        fPoolHead;    /* the oldest byte */
+    UInt32                        fPoolLen;
+    IOSimpleLock                 *fPoolLock;
+    int                           fMajor;       /* our character device's, -1 before */
+    void                         *fNodeRandom;
+    void                         *fNodeURandom;
+#endif
 };
 
 #endif /* !_GR_STEI_VIRTIORAND_H */
