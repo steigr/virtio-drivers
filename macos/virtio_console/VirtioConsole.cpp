@@ -63,6 +63,38 @@ enum {
 #define kQueueStateMask (PD_S_RXQ_MASK | PD_S_TXQ_MASK | PD_S_TX_BUSY)
 #define kLineAlwaysUp   (PD_RS232_S_CAR | PD_RS232_S_CTS | PD_RS232_S_DSR)
 
+/* The port's number among the virtio consoles: how many sit at a lower PCI address than this one.
+ * IOSerialFamily numbers clashing names in the order the ports attach, which is not the slots'
+ * order: with two consoles the one in the higher slot came up as cu.virtio-0 and the guest agent,
+ * which takes the lowest, answered on the host's log console instead (live, 10.1.5, 2026-10-04).
+ * By address the numbers are stable: the host puts the agent's console in the lower slot. All the
+ * bus's nubs exist before any driver starts, so the count does not depend on matching order.
+ * (IOPCIDevice's address is its public space member on every release from 10.0.) */
+static int consoleIndex(IOPCIDevice *me)
+{
+    OSDictionary *match = IOService::serviceMatching("IOPCIDevice");
+    OSIterator *it = match ? IOService::getMatchingServices(match) : 0;
+    IOPCIDevice *d;
+    int index = 0;
+
+    if (match)
+        match->release();
+    if (!it)
+        return 0;
+    while ((d = OSDynamicCast(IOPCIDevice, it->getNextObject())) != 0) {
+        if (d == me || d->configRead32(0) != 0x10031af4)     /* vendor 1af4, device 1003 */
+            continue;
+        if (d->space.s.busNum < me->space.s.busNum ||
+            (d->space.s.busNum == me->space.s.busNum &&
+             (d->space.s.deviceNum < me->space.s.deviceNum ||
+              (d->space.s.deviceNum == me->space.s.deviceNum &&
+               d->space.s.functionNum < me->space.s.functionNum))))
+            index++;
+    }
+    it->release();
+    return index;
+}
+
 static inline UInt32 roundPage(UInt32 n) { return (n + kPage - 1) & ~(UInt32)(kPage - 1); }
 
 /* Orders memory the device reads against the register write that tells it to. PowerPC's sync;
@@ -342,12 +374,18 @@ bool io_virtio_VirtioConsole::start(IOService *provider)
     if (!deviceStart())
         goto fail;
 
-    /* The port, as IOSerialFamily's BSD client finds it: /dev/cu.virtio-0 and /dev/tty.virtio-0. */
+    /* The port, as IOSerialFamily's BSD client finds it: /dev/cu.virtio-N and /dev/tty.virtio-N,
+     * N the console's place by PCI address (consoleIndex). */
     fNub = new IORS232SerialStreamSync;
     if (!fNub || !fNub->init(0, 0) || !fNub->attach(this))
         goto fail;
-    fNub->setProperty(kIOTTYBaseNameKey, "virtio-");
-    fNub->setProperty(kIOTTYSuffixKey, "0");
+    {
+        char suffix[12];
+
+        sprintf(suffix, "%d", consoleIndex(fPCI));
+        fNub->setProperty(kIOTTYBaseNameKey, "virtio-");
+        fNub->setProperty(kIOTTYSuffixKey, suffix);
+    }
     fNub->registerService();
     return true;
 
