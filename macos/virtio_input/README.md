@@ -38,7 +38,10 @@ is to turn the machine's USB off and add the controller and keyboard back:
     -device pci-ohci,id=ohci -device usb-kbd,bus=ohci.0
     -device virtio-tablet-pci
 
-The virtio tablet is then QEMU's only pointing device, and no race is possible. On 10.2.8 and
+The virtio tablet is then QEMU's only pointing device, and no race is possible. The orchestrator
+(`qemu-vm-container-macos-guest`) renders exactly this with `macos run --virtio-tablet` (chart
+`pointer.virtioTablet`), on 10.0 and 10.1 adding just the tablet to ADB, and keeps such a machine
+awake with a key press where no relative pointer is left. On 10.2.8 and
 10.3.9 (2026-10-05) the guest booted, the USB keyboard typed the login and `tablet_test.py --login`
 all passed. What else was tried, on the 10.3 command line, before boot (`query-mice`):
 
