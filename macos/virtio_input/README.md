@@ -28,6 +28,38 @@ the first event arrives ("no event yet; making the device QEMU's current pointer
 log, `Reactivations` in the registry). By hand, the monitor's `mouse_set <index>` does the same. A
 `usb-tablet` beside the virtio one is a second absolute device to race with and is better left out.
 
+### Leaving the tablet no rival (10.2, 10.3)
+
+mac99 with `via=pmu` has no ADB, and with USB on it builds `usb-kbd` and `usb-mouse` itself
+(`hw/ppc/mac_newworld.c`), with no id and no switch for the mouse alone. The way to drop the mouse
+is to turn the machine's USB off and add the controller and keyboard back:
+
+    -machine mac99,via=pmu,usb=off
+    -device pci-ohci,id=ohci -device usb-kbd,bus=ohci.0
+    -device virtio-tablet-pci
+
+The virtio tablet is then QEMU's only pointing device, and no race is possible. On 10.2.8 and
+10.3.9 (2026-10-05) the guest booted, the USB keyboard typed the login and `tablet_test.py --login`
+all passed. What else was tried, on the 10.3 command line, before boot (`query-mice`):
+
+| Variant | Pointers | Race gone |
+| --- | --- | --- |
+| `via=pmu` (the orchestrator's 10.3 preset, with its `usb-tablet`) | virtio tablet, USB tablet, USB mouse | no |
+| `usb=off` + own OHCI + `usb-kbd` + `usb-tablet` | virtio tablet, USB tablet | no: two absolute devices |
+| **`usb=off` + own OHCI + `usb-kbd`** | **virtio tablet** | **yes** |
+| `via=pmu-adb` | virtio tablet, USB tablet, ADB mouse | yes for the mouse (QEMU's ADB mouse never activates itself), but see below |
+| `via=pmu`, the USB mouse `device_del`ed at runtime | virtio tablet, USB tablet | no, and it is a runtime step |
+
+The cost is a relative pointer. A relative QMP `input-send-event` (no device named), what the
+orchestrator's keep-awake sends every minute, goes to QEMU's first device that takes relative
+motion: the USB mouse with `via=pmu` (it moved 10.3's cursor), the ADB mouse on 10.0 and 10.1 (it
+moved theirs, the tablet current). With `usb=off` there is none and the nudge is dropped; with
+`via=pmu-adb` 10.3 logged in with the ADB keyboard but did not move its cursor for the ADB mouse
+either. A key press is activity too: on 10.0 a QMP `send-key ctrl` took IOHIDSystem's
+`HIDIdleTime` from 23 s to 56 ms (10.1 and 10.2 publish no `HIDIdleTime`, and 10.3's did not
+change at all, so it was not measurable there). 10.0 and 10.1 (CUDA) need none of this: ADB has no
+race and keeps its mouse for the nudges.
+
 QEMU 11.0.2 aborts (`Property 'qemu-fixed-text-console.device' not found`) on a QMP
 `input-send-event` that names a `device`, at least with `-display none`; select the device with
 the monitor's `mouse_set <index>` and send events without `device` instead.
