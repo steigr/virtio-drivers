@@ -26,7 +26,9 @@
  * xnu-123 and in IOHIDFamily-34 and -86 of 10.2 and 10.3); relative motion through
  * dispatchRelativePointerEvent, which accelerates it as for a mouse; the wheel through
  * dispatchScrollWheelEvent. Events are taken on the driver's own work loop, interrupt-driven, or
- * polled every 10 ms where no interrupt comes.
+ * polled every 10 ms where no interrupt comes. Until the first event arrives the driver re-asserts
+ * the device a few times, so that QEMU, which follows the device activated last, sends its pointer
+ * here and not to its USB mouse (see reactivate()).
  *
  * Built twice from this one source, as VirtioConsole is: GCC 2.95 for 10.0 and 10.1, GCC 3 for
  * 10.2 on. So no templates, exceptions, RTTI or C++ library, and only what 10.0's kernel,
@@ -70,6 +72,7 @@ protected:
 private:
     /* the transport */
     bool     findCaps();
+    bool     deviceNegotiate();
     bool     deviceProbe();
     void     deviceStart();
     void     deviceReset();
@@ -97,6 +100,7 @@ private:
     void     service();
     void     interruptOccurred();
     void     timeoutOccurred();
+    void     reactivate();
 
     static bool interruptFilter(OSObject *owner, IOFilterInterruptEventSource *src);
     static void interruptAction(OSObject *owner, IOInterruptEventSource *src, int count);
@@ -152,6 +156,9 @@ private:
     UInt32                        fQuietTicks;
     UInt32                        fReports;         /* dispatched, for the Reports property */
     UInt32                        fReportsPublished;
+    bool                          fSeenEvent;       /* the device has sent anything at all */
+    UInt32                        fReactivations;
+    SInt32                        fReactivateLeftMS;
 };
 
 #endif /* !_GR_STEI_VIRTIOTABLET_H */

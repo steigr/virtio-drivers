@@ -118,6 +118,8 @@ enum {
     kPollMS            = 10,
     kWatchdogMS        = 100,
     kQuietTicksMax     = 20,
+    kReactivateFirstMS = 5000,      /* see reactivate(): 5, 10, 20, 40, 80 and 160 s after start */
+    kReactivateMax     = 6,
     kButtons           = 3
 };
 
@@ -346,12 +348,39 @@ bool io_virtio_VirtioTablet::axisSetup(UInt8 axis, SInt32 *base, UInt8 *shift, S
     return true;
 }
 
+/* Resets the device and brings it up to FEATURES_OK: VIRTIO_F_VERSION_1 and nothing else. */
+bool io_virtio_VirtioTablet::deviceNegotiate()
+{
+    UInt32 f1;
+
+    deviceReset();
+    cfgWrite8(kComStatus, kStatusAcknowledge);
+    cfgWrite8(kComStatus, kStatusAcknowledge | kStatusDriver);
+
+    cfgWrite32(kComDeviceFeatureSel, 1);
+    f1 = regRead(&fCommon, kComDeviceFeature, 4);
+    if (!(f1 & kFeatureVersion1)) {
+        IOLog("VirtioTablet: the device does not offer VIRTIO_F_VERSION_1\n");
+        return false;
+    }
+    cfgWrite32(kComDriverFeatureSel, 0);
+    cfgWrite32(kComDriverFeature, 0);
+    cfgWrite32(kComDriverFeatureSel, 1);
+    cfgWrite32(kComDriverFeature, kFeatureVersion1);
+    cfgWrite8(kComStatus, kStatusAcknowledge | kStatusDriver | kStatusFeaturesOK);
+    if (!(cfgRead8(kComStatus) & kStatusFeaturesOK)) {
+        IOLog("VirtioTablet: the device did not accept the features\n");
+        return false;
+    }
+    return true;
+}
+
 /* Brings the device up to FEATURES_OK and finds out what it is: an absolute pointer (ABS_X and
  * ABS_Y with their ranges), a relative one (REL_X and REL_Y), or neither -- a keyboard, which is
  * declined. Allocates the event queue. */
 bool io_virtio_VirtioTablet::deviceProbe()
 {
-    UInt32 cmd, f1;
+    UInt32 cmd;
     char name[32];
     UInt8 n, i;
 
@@ -362,26 +391,8 @@ bool io_virtio_VirtioTablet::deviceProbe()
         IOLog("VirtioTablet: the device has no usable modern virtio PCI capabilities\n");
         return false;
     }
-
-    deviceReset();
-    cfgWrite8(kComStatus, kStatusAcknowledge);
-    cfgWrite8(kComStatus, kStatusAcknowledge | kStatusDriver);
-
-    cfgWrite32(kComDeviceFeatureSel, 1);
-    f1 = regRead(&fCommon, kComDeviceFeature, 4);
-    if (!(f1 & kFeatureVersion1)) {
-        IOLog("VirtioTablet: the device does not offer VIRTIO_F_VERSION_1\n");
+    if (!deviceNegotiate())
         goto failed;
-    }
-    cfgWrite32(kComDriverFeatureSel, 0);
-    cfgWrite32(kComDriverFeature, 0);
-    cfgWrite32(kComDriverFeatureSel, 1);
-    cfgWrite32(kComDriverFeature, kFeatureVersion1);
-    cfgWrite8(kComStatus, kStatusAcknowledge | kStatusDriver | kStatusFeaturesOK);
-    if (!(cfgRead8(kComStatus) & kStatusFeaturesOK)) {
-        IOLog("VirtioTablet: the device did not accept the features\n");
-        goto failed;
-    }
 
     n = inputQuery(kSelIdName, 0);
     if (n > sizeof(name) - 1)
@@ -585,6 +596,7 @@ void io_virtio_VirtioTablet::service()
         if (id >= fSlots)
             continue;
         e = fBuf + kEventSize * id;
+        fSeenEvent = true;
         event(get16(e), get16(e + 2), get32(e + 4));
         queuePublish((UInt16) id);
         returned = true;
@@ -647,7 +659,39 @@ void io_virtio_VirtioTablet::timeoutOccurred()
         fQuietTicks = 0;
     fInterruptsSeen = fInterrupts;
     service();
+    if (!fSeenEvent && fReactivations < kReactivateMax) {
+        fReactivateLeftMS -= (SInt32) (fPolled ? kPollMS : kWatchdogMS);
+        if (fReactivateLeftMS <= 0) {
+            reactivate();
+            fReactivations++;
+            fReactivateLeftMS = (SInt32) kReactivateFirstMS << fReactivations;
+        }
+    }
     fTimer->setTimeoutMS(fPolled ? kPollMS : kWatchdogMS);
+}
+
+/* Makes the device QEMU's current pointer again, while it has sent nothing yet.
+ *
+ * QEMU hands a VNC client's (or its window's) pointer to its "current" pointing device, the one the
+ * guest activated last, and only an absolute current device makes it send absolute positions. The
+ * virtio device is activated when its driver sets DRIVER_OK; on the PMU machines (10.2, 10.3) QEMU's
+ * own USB mouse, which mac99 always builds, is activated at the guest's first poll of it, and
+ * whichever of the two comes later at boot wins. With the USB mouse current, VNC is relative and
+ * the tablet hears nothing (10.3.9, 2026-10-05: query-mice had "QEMU HID Mouse" current, the driver
+ * 0 reports, the VNC client's pointer moved nothing, with or without a usb-tablet beside it;
+ * mouse_set to the tablet made every move land). A reset takes the device out (QEMU deactivates it)
+ * and DRIVER_OK puts it back in front. The USB mouse is activated once per USB reset, so a few tries
+ * in the first minutes settle it; the first event ends them. */
+void io_virtio_VirtioTablet::reactivate()
+{
+    IOLog("VirtioTablet: no event yet; making the device QEMU's current pointer again (%d)\n",
+          (int) fReactivations + 1);
+    if (!deviceNegotiate())
+        return;
+    deviceStart();
+    fDX = fDY = fWheel = fHWheel = 0;
+    fMoved = false;
+    setProperty("Reactivations", (unsigned long long) (fReactivations + 1), 32);
 }
 
 /* ------------------------------------------------------------------------------------------ */
@@ -683,6 +727,7 @@ bool io_virtio_VirtioTablet::start(IOService *provider)
     polled = OSDynamicCast(OSBoolean, getProperty("Polled"));
     fPolled = polled && polled->isTrue();
     fFirst = true;
+    fReactivateLeftMS = kReactivateFirstMS;
 
     fWorkLoop = IOWorkLoop::workLoop();
     if (!fWorkLoop)

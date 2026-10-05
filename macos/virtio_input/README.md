@@ -18,6 +18,16 @@ QEMU's VNC server, and its own windows, then send the pointer to the tablet as a
 `disable-modern`. `virtio-mouse-pci` works the same way, relative; `virtio-keyboard-pci` has the
 same ID and is left alone (logged as "is no pointing device").
 
+QEMU sends the pointer to its *current* pointing device, the one the guest activated last
+(`query-mice`, "current"), and VNC is absolute only while that one is. On the PMU machines (10.2,
+10.3) mac99 always builds a USB mouse, which the guest activates at its first poll, and at boot it
+can come after the tablet: then VNC is relative and the tablet hears nothing, whether or not a
+`usb-tablet` is there too. The driver therefore re-asserts the device (a reset, then DRIVER_OK,
+which QEMU answers by making it current) 5, 10, 20, 40, 80 and 160 seconds after it starts, until
+the first event arrives ("no event yet; making the device QEMU's current pointer again" in the
+log, `Reactivations` in the registry). By hand, the monitor's `mouse_set <index>` does the same. A
+`usb-tablet` beside the virtio one is a second absolute device to race with and is better left out.
+
 QEMU 11.0.2 aborts (`Property 'qemu-fixed-text-console.device' not found`) on a QMP
 `input-send-event` that names a `device`, at least with `-display none`; select the device with
 the monitor's `mouse_set <index>` and send events without `device` instead.
@@ -50,6 +60,8 @@ IOHIDSystem picks it up like any other pointing device: the cursor follows from 
 - Events are taken a report at a time (up to `EV_SYN`); `SYN_DROPPED` starts the next report afresh.
   Every event slot is given straight back, so QEMU, which holds a report until it has slots for all
   of it, never waits.
+- Re-asserts the device until its first event, so that QEMU sends the pointer here (see "Host
+  side").
 - Interrupt-driven where the platform routes the device's interrupt (all four releases did); polls
   every 10 ms where it does not, or when events wait two watchdog seconds with no interrupt.
   `Polled` set to `true` in the personality forces polling.
@@ -113,9 +125,9 @@ The local ladder's guests (QEMU 11.0.2, TCG, `mac99`, 1024x768) with `-device vi
   scrolled the Finder's Applications window down; after `kextunload` the cursor was dead (all five
   moves "nothing changed"), and after `kextload` all passed again.
 - 10.3.9 (the same `gcc3` binary): the five moves; clicks on the login window (the user, then the
-  alert's OK) took; `kextunload` and reload. The ladder's 10.3 guest cannot log in ("You cannot
-  continue logging in at this time": its NIC is `en1`, and MCX finds no machine address), so there
-  is no menu bar to test there.
+  alert's OK) took; `kextunload` and reload. The ladder's 10.3 guest could not log in then ("You
+  cannot continue logging in at this time": its only NIC, not built in, was `en1`, and MCX found no
+  machine address); renamed `en0` in `NetworkInterfaces.plist`, it logs in.
 - 10.0.4 (`gcc2`, GCC 2.95.2 gcc-926): the five moves; clicks into the login window's fields and the
   login; the Apple menu; a double-click opened TextEdit; dragging the grow box resized a window; the
   wheel scrolled TextEdit (10.0's Finder does not scroll by wheel at all); `kextunload` and reload.
@@ -130,6 +142,15 @@ package installed (`installer -pkg` on 10.2 and 10.3, `packaging/installer/insta
 and 10.1) and the guest restarted with the tablet: the kext loaded at boot on all four, and
 `tablet_test.py` all passed on 10.0.4 (`--login-fields`), 10.1.5 and 10.2.8 (`--login`), and on
 10.3.9 with `--no-menu`.
+
+A later boot of 10.3.9 lost the race to the USB mouse: the driver had 0 reports, QMP's own
+absolute events reached it (the cursor landed on them), the VNC client's moved nothing, and
+`mouse_set` to the tablet made `tablet_test.py` pass. With the re-assertion, all four rebuilt by the
+ladder, installed from their packages and booted with the orchestrator's device sets (on 10.3 its
+`usb-tablet` too): `query-mice` had the virtio tablet current on each, the driver re-asserted it
+four or five times before the first event, and `tablet_test.py` all passed on all four, logging in
+through the tablet (10.0 `--login-fields`, the others `--login`). On 10.3.9 the wheel then scrolled
+the Finder's Applications window.
 
 ## References
 
