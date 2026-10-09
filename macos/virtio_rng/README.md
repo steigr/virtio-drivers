@@ -57,9 +57,9 @@ the kernel's C++ ABI differs between GCC 2.95 (10.0, 10.1) and GCC 3 (10.2 on).
     make ABI=gcc3                                                                # on 10.2
 
 Each leaves `build/<ABI>/VirtioRand.kext`. Neither declares `com.apple.kernel.bsd` (no one version
-satisfies both 10.0 and 10.1, see `../virtio9p`); the kernel's `random_write` resolves without it,
+satisfies both 10.0 and 10.1, see `../../virtio9p`); the kernel's `random_write` resolves without it,
 as virtio9p's BSD symbols do. Neither build needs `-fpermissive` (the headers it includes are not
-`IOEthernetController`'s). The build and copy steps are `../virtio9p/README.md`'s "Rebuilding,
+`IOEthernetController`'s). The build and copy steps are `../../virtio9p/README.md`'s "Rebuilding,
 step by step", with `virtiorand` for `virtio9p` and `VirtioRand.kext` for `Virtio9P.kext` (there is
 no `mount_9p`).
 
