@@ -12,10 +12,30 @@
 
 #include <mach/mach_types.h>
 
-extern kern_return_t OSRuntimeInitializeCPP(kmod_info_t *ki, void *data);
-extern kern_return_t OSRuntimeFinalizeCPP(kmod_info_t *ki, void *data);
 extern int p9fs_register(void);
 extern int p9fs_unregister(void);
+
+#if defined(__x86_64__)
+/*
+ * The x86_64 kernels (10.6 on) set a kext's C++ up before its start routine and tear it down
+ * after its stop routine has succeeded, and export neither call to kexts ("_OSRuntimeInitializeCPP
+ * ... unresolved", live, 10.6.8 x86_64, 2026-10-10). So the order above holds by itself, and the
+ * routines only add and take away the filesystem.
+ */
+static kern_return_t
+virtio9p_start(kmod_info_t *ki, void *data)
+{
+    return p9fs_register() == 0 ? KERN_SUCCESS : KERN_FAILURE;
+}
+
+static kern_return_t
+virtio9p_stop(kmod_info_t *ki, void *data)
+{
+    return p9fs_unregister() == 0 ? KERN_SUCCESS : KERN_FAILURE;
+}
+#else
+extern kern_return_t OSRuntimeInitializeCPP(kmod_info_t *ki, void *data);
+extern kern_return_t OSRuntimeFinalizeCPP(kmod_info_t *ki, void *data);
 
 static kern_return_t
 virtio9p_start(kmod_info_t *ki, void *data)
@@ -43,6 +63,7 @@ virtio9p_stop(kmod_info_t *ki, void *data)
         (void) p9fs_register();
     return res;
 }
+#endif
 
 KMOD_EXPLICIT_DECL(io.virtio.driver.Virtio9P, VIRTIO9P_VERSION, virtio9p_start, virtio9p_stop)
 

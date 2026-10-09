@@ -225,7 +225,7 @@ p9_begin(struct p9mount *pm, struct p9msg *t, u_int8_t type)
 {
     while (pm->pm_chan) {
         pm->pm_chanwant = 1;
-        (void) tsleep((caddr_t) &pm->pm_chan, PRIBIO, "9pchan", 0);
+        P9_CHANSLEEP(pm);
     }
     if (pm->pm_dead)
         return ENXIO;

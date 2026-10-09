@@ -1,23 +1,32 @@
 /*
- * p9fs: the "9p" filesystem of Virtio9P.kext, a 9P2000.L client for the BSD kernels of Mac OS X
- * 10.0 to 10.3 (the VFS before 10.4's KPI). See README.md for what it does and does not do.
+ * p9fs: the "9p" filesystem of Virtio9P.kext, a 9P2000.L client for Mac OS X 10.0 to 10.13, on
+ * PowerPC and Intel. See README.md for what it does and does not do.
  *
- * Layers, bottom up:
+ * Layers, bottom up; the first two are every release's, the frontend one of two:
  *
  *   p9_transport.h   the virtio device: one request, one reply, one at a time (Virtio9P.cpp)
  *   p9fs_proto.c     9P2000.L messages as C calls, the channel lock and the fid allocator
- *   p9fs_node.c      vnodes: one per qid.path, their fids, attributes and the UBC
- *   p9fs_vnops.c     the vnode operations
- *   p9fs_vfsops.c    mount, unmount, statfs, and registering the filesystem with the kernel
+ *   p9fs_bsd_*.c     the frontend for the 4.4BSD-Lite VFS of 10.0 to 10.3 (P9FS_KPI unset):
+ *                    nodes, vnode operations, mount and registration
+ *   p9fs_kpi_*.c     the frontend for the VFS KPI of 10.4 on (P9FS_KPI): the same, written
+ *                    against vnode_t, vnop_*_args and vfs_fsadd
  *
- * Locking. All of it runs under the kernel funnel, which a thread gives up whenever it blocks,
- * so state is safe between sleeps and must be looked at again after one. Vnodes are not locked
- * at all, as NFS's are not on these releases (vop_nolock). The device carries one message at a
- * time; whoever is sending holds the mount's channel, and sleeps for it otherwise. The channel
- * is held only inside p9fs_proto.c, never across anything that can come back into this
- * filesystem: a page fault on a mapped 9p file, vnode recycling, the UBC. So data goes through
- * kernel buffers, and a fid a call works on is read from the node only once the channel is held
- * (callers pass the field's address), so that one swapped or closed meanwhile is never sent.
+ * Locking, BSD frontend. All of it runs under the kernel funnel, which a thread gives up whenever
+ * it blocks, so state is safe between sleeps and must be looked at again after one. Vnodes are
+ * not locked at all, as NFS's are not on these releases (vop_nolock). The device carries one
+ * message at a time; whoever is sending holds the mount's channel, and sleeps for it otherwise.
+ * The channel is held only inside p9fs_proto.c, never across anything that can come back into
+ * this filesystem: a page fault on a mapped 9p file, vnode recycling, the UBC. So data goes
+ * through kernel buffers, and a fid a call works on is read from the node only once the channel
+ * is held (callers pass the field's address), so that one swapped or closed meanwhile is never
+ * sent.
+ *
+ * Locking, KPI frontend. There is no funnel -- the x86_64 kernels have none -- so each mount has
+ * a mutex that plays its part: taken on the way into every operation, held across the messages
+ * it sends, and given up around everything that can come back into this filesystem or wait for
+ * one of its vnodes (uiomove, the UBC, vnode_create, vnode_get/put, vnode_recycle), as the funnel
+ * was given up at a sleep. The reasoning above holds unchanged: state is looked at again after
+ * any of those. The channel is then never contended, and p9fs_proto.c needs no lock of its own.
  */
 
 #ifndef _P9FS_H
@@ -28,6 +37,9 @@
 #include <sys/queue.h>
 #include <sys/vnode.h>
 #include <sys/mount.h>
+#ifdef P9FS_KPI
+#include <kern/locks.h>
+#endif
 
 #include "p9fs_args.h"
 
@@ -134,6 +146,10 @@ struct p9mount {
     struct p9nodehash  *pm_hash;        /* nodes by qid.path */
     u_long              pm_hashmask;
     int                 pm_hashlock;    /* a node is being made: others wait, then look again */
+#ifdef P9FS_KPI
+    lck_mtx_t          *pm_lock;        /* the frontend's: see above */
+    u_int64_t           pm_rootqpath;   /* the root's qid.path, so p9_nget can mark its vnode */
+#endif
 };
 
 /* p9node.n_flag */
@@ -161,9 +177,23 @@ struct p9node {
     u_int64_t           n_dircookie;    /* ... and the server's offset of that entry */
 };
 
+#ifdef P9FS_KPI
+#define VTOP9(vp)           ((struct p9node *) vnode_fsnode(vp))
+#define VFSTOP9(mp)         ((struct p9mount *) vfs_fsprivate(mp))
+#else
 #define VTOP9(vp)           ((struct p9node *) (vp)->v_data)
-#define P9TOV(np)           ((np)->n_vnode)
 #define VFSTOP9(mp)         ((struct p9mount *) (mp)->mnt_data)
+#endif
+#define P9TOV(np)           ((np)->n_vnode)
+
+/* How p9fs_proto.c waits for the channel: under the funnel, a sleep that gives it up; under the
+ * KPI frontend's mount lock, which its callers hold, never (see above), but the same sleep on
+ * that lock if it ever is. */
+#ifdef P9FS_KPI
+#define P9_CHANSLEEP(pm)    ((void) msleep(&(pm)->pm_chan, (pm)->pm_lock, PRIBIO, "9pchan", NULL))
+#else
+#define P9_CHANSLEEP(pm)    ((void) tsleep((caddr_t) &(pm)->pm_chan, PRIBIO, "9pchan", 0))
+#endif
 
 #define P9_ATTRTIMEO        2           /* an Rgetattr is believed for 1 to 2 seconds */
 
@@ -202,7 +232,7 @@ int     p9_renameat(struct p9mount *pm, u_int32_t *odfidp, const char *oname, in
 int     p9_statfs(struct p9mount *pm, u_int32_t *fidp, struct p9_statfs *sf);
 int     p9_fsync(struct p9mount *pm, u_int32_t *fidp);
 
-/* p9fs_node.c */
+/* p9fs_bsd_node.c, p9fs_kpi_node.c */
 int     p9_nodeinit(struct p9mount *pm);
 void    p9_nodefini(struct p9mount *pm);
 int     p9_nget(struct p9mount *pm, u_int32_t fid, struct p9_qid *qid, struct p9_attr *attr,
@@ -214,10 +244,12 @@ int     p9_openfid(struct p9node *np, int fflag, u_int32_t **fidpp);
 void    p9_closefids(struct p9node *np);
 u_int32_t p9_fileid(u_int64_t qpath);
 enum vtype p9_vtype(u_int32_t mode);
+#ifndef P9FS_KPI
 int     p9fs_inactive(void *v);
 int     p9fs_reclaim(void *v);
+#endif
 
-/* p9fs_vfsops.c */
+/* p9fs_bsd_vfsops.c, p9fs_kpi_vfsops.c */
 int     p9fs_register(void);
 int     p9fs_unregister(void);
 

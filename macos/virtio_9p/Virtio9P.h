@@ -1,6 +1,6 @@
 /*
  * Virtio9P: QEMU's legacy virtio 9P transport (virtio-9p-pci, 1af4:1009) as a filesystem, for Mac
- * OS X 10.0 and later on PowerPC.
+ * OS X 10.0 to 10.13, on PowerPC and on Intel (i386 and x86_64).
  *
  * One kext, two halves. This one, the IOKit driver, claims the PCI device, reads its mount tag,
  * sets up its one virtqueue and carries 9P messages: a request buffer and a reply buffer, each
@@ -12,9 +12,13 @@
  * on -- so the same restrictions hold: no templates, exceptions, RTTI or C++ library, and only
  * what 10.0's kernel and IOPCIFamily export.
  *
- * Legacy (0.9.5) virtio-pci, no feature but the mount tag negotiated, rings in the guest's
- * (big-endian) byte order. Polled: a request is published and its completion watched for with
- * a short spin and then millisecond sleeps; the rings ask the device for no interrupt.
+ * Built a third time for the Intel releases, against the KPI of 10.4 on (ABI=kpi, README.md's
+ * "Intel"), where the same restrictions are kept so that this file stays one source.
+ *
+ * Legacy (0.9.5) virtio-pci, no feature but the mount tag negotiated, rings in the guest's own
+ * byte order -- big-endian on PowerPC, little-endian on Intel -- so that nothing in them is ever
+ * swapped. Polled: a request is published and its completion watched for with a short spin and
+ * then millisecond sleeps; the rings ask the device for no interrupt.
  */
 
 #ifndef _GR_STEI_VIRTIO9P_H
@@ -23,10 +27,12 @@
 #include <IOKit/IOService.h>
 #include <IOKit/pci/IOPCIDevice.h>
 
-/* A split virtqueue, legacy layout; see VirtioConsole.h. */
+/* A split virtqueue, legacy layout; see VirtioConsole.h. The address is one 64-bit field in the
+ * guest's order: VirtioConsole's addrHigh and addrLow are that field's halves on a big-endian
+ * guest only. unsigned long long, not UInt64, which some of these releases' headers define as a
+ * pair of words. */
 struct Virtio9PDesc {
-    UInt32 addrHigh;
-    UInt32 addrLow;
+    unsigned long long addr;
     UInt32 len;
     UInt16 flags;
     UInt16 next;

@@ -65,8 +65,13 @@ enum {
 static inline UInt32 roundPage(UInt32 n) { return (n + kPage - 1) & ~(UInt32)(kPage - 1); }
 
 /* Orders memory the device reads against the register write that tells it to; see
- * VirtioConsole.cpp. */
+ * VirtioConsole.cpp. On Intel, stores are not reordered with other stores and an I/O port
+ * write waits for them, so only the compiler has to be stopped. */
+#if defined(__ppc__)
 static inline void barrier() { __asm__ __volatile__ ("sync" : : : "memory"); }
+#else
+static inline void barrier() { __asm__ __volatile__ ("" : : : "memory"); }
+#endif
 
 /* With the BAR mapped, register offsets are relative to it; without, they are absolute I/O
  * ports, the BAR's own address plus the register. */
@@ -172,12 +177,10 @@ bool io_virtio_Virtio9P::deviceStart()
     }
     if (!fTBuf)
         goto fail;
-    fDesc[0].addrHigh = 0;
-    fDesc[0].addrLow  = fTBufPhys;
+    fDesc[0].addr     = fTBufPhys;
     fDesc[0].flags    = kDescNext;
     fDesc[0].next     = 1;
-    fDesc[1].addrHigh = 0;
-    fDesc[1].addrLow  = fRBufPhys;
+    fDesc[1].addr     = fRBufPhys;
     fDesc[1].len      = fBufSize;
     fDesc[1].flags    = kDescWrite;
     fDesc[1].next     = 0;
