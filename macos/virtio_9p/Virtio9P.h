@@ -1,0 +1,97 @@
+/*
+ * Virtio9P: QEMU's legacy virtio 9P transport (virtio-9p-pci, 1af4:1009) as a filesystem, for Mac
+ * OS X 10.0 and later on PowerPC.
+ *
+ * One kext, two halves. This one, the IOKit driver, claims the PCI device, reads its mount tag,
+ * sets up its one virtqueue and carries 9P messages: a request buffer and a reply buffer, each
+ * physically contiguous, chained into one descriptor pair per message. The other half,
+ * p9fs_*.c, is the filesystem ("9p", mounted with mount_9p), which speaks 9P2000.L to QEMU's
+ * server over p9_transport.h.
+ *
+ * Built twice from one source like VirtioConsole -- GCC 2.95 for 10.0 and 10.1, GCC 3 for 10.2
+ * on -- so the same restrictions hold: no templates, exceptions, RTTI or C++ library, and only
+ * what 10.0's kernel and IOPCIFamily export.
+ *
+ * Legacy (0.9.5) virtio-pci, no feature but the mount tag negotiated, rings in the guest's
+ * (big-endian) byte order. Polled: a request is published and its completion watched for with
+ * a short spin and then millisecond sleeps; the rings ask the device for no interrupt.
+ */
+
+#ifndef _GR_STEI_VIRTIO9P_H
+#define _GR_STEI_VIRTIO9P_H
+
+#include <IOKit/IOService.h>
+#include <IOKit/pci/IOPCIDevice.h>
+
+/* A split virtqueue, legacy layout; see VirtioConsole.h. */
+struct Virtio9PDesc {
+    UInt32 addrHigh;
+    UInt32 addrLow;
+    UInt32 len;
+    UInt16 flags;
+    UInt16 next;
+};
+
+struct Virtio9PUsedElem {
+    UInt32 id;
+    UInt32 len;
+};
+
+class io_virtio_Virtio9P : public IOService
+{
+    OSDeclareDefaultStructors(io_virtio_Virtio9P)
+
+public:
+    virtual bool start(IOService *provider);
+    virtual void stop(IOService *provider);
+    virtual void free();
+    virtual bool terminate(IOOptionBits options = 0);
+
+    /* For p9_transport.h. */
+    bool     hasTag(const char *tag);
+    int      claim(UInt8 **tbuf, UInt8 **rbuf, UInt32 *size);
+    void     unclaim();
+    int      rpc(UInt32 tlen, UInt32 *rlen);
+
+private:
+    bool     deviceStart();
+    void     deviceReset();
+    bool     readTag();
+
+    UInt16   rd16(UInt16 off);
+    UInt32   rd32(UInt16 off);
+    UInt8    rd8(UInt16 off);
+    void     wr8(UInt16 off, UInt8 v);
+    void     wr16(UInt16 off, UInt16 v);
+    void     wr32(UInt16 off, UInt32 v);
+
+    IOPCIDevice        *fPCI;
+    IOMemoryMap        *fIO;
+    UInt16              fIOBase;        /* the I/O BAR's port, used when it could not be mapped */
+
+    UInt16              fQueueNum;      /* the request queue's size, as the device reports it */
+    UInt8              *fRing;          /* descriptors, available ring, used ring */
+    IOPhysicalAddress   fRingPhys;
+    vm_size_t           fRingSize;
+    volatile Virtio9PDesc     *fDesc;
+    volatile UInt16           *fAvailFlags;
+    volatile UInt16           *fAvailIdx;
+    volatile UInt16           *fAvailRing;
+    volatile UInt16           *fUsedIdx;
+    volatile Virtio9PUsedElem *fUsedRing;
+    UInt16              fLastUsed;
+    UInt16              fNextAvail;
+
+    UInt8              *fTBuf;          /* the request buffer */
+    IOPhysicalAddress   fTBufPhys;
+    UInt8              *fRBuf;          /* the reply buffer */
+    IOPhysicalAddress   fRBufPhys;
+    UInt32              fBufSize;
+
+    char                fTag[64];       /* the mount tag, NUL-terminated */
+    UInt32              fClaimed;       /* a mount is using the device */
+    bool                fDeviceUp;
+    volatile bool       fStopping;
+};
+
+#endif /* !_GR_STEI_VIRTIO9P_H */
