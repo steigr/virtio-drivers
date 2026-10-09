@@ -11,6 +11,8 @@
  */
 
 #include <mach/mach_types.h>
+#include <libkern/libkern.h>
+#include "p9_transport.h"
 
 extern int p9fs_register(void);
 extern int p9fs_unregister(void);
@@ -40,10 +42,13 @@ extern kern_return_t OSRuntimeFinalizeCPP(kmod_info_t *ki, void *data);
 static kern_return_t
 virtio9p_start(kmod_info_t *ki, void *data)
 {
-    kern_return_t res = OSRuntimeInitializeCPP(ki, data);
+    kern_return_t res;
 
+    P9_TRACE("start: C++");
+    res = OSRuntimeInitializeCPP(ki, data);
     if (res != KERN_SUCCESS)
         return res;
+    P9_TRACE("start: the filesystem");
     if (p9fs_register() != 0) {
         (void) OSRuntimeFinalizeCPP(ki, data);
         return KERN_FAILURE;

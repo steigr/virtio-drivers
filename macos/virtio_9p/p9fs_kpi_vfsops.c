@@ -240,6 +240,7 @@ p9fs_register(void)
     struct vfs_fsentry vfe;
     int error;
 
+    P9_TRACE("register: lock group");
     p9_lckgrp = lck_grp_alloc_init("9p", LCK_GRP_ATTR_NULL);
     if (p9_lckgrp == NULL)
         return ENOMEM;
@@ -252,7 +253,9 @@ p9fs_register(void)
 #ifdef VFS_TBL64BITREADY
     vfe.vfe_flags |= VFS_TBL64BITREADY;
 #endif
+    P9_TRACE("register: vfs_fsadd");
     error = vfs_fsadd(&vfe, &p9fs_vfstable);
+    P9_TRACE("register: done");
     if (error) {
         printf("9p: vfs_fsadd: %d\n", error);
         lck_grp_free(p9_lckgrp);

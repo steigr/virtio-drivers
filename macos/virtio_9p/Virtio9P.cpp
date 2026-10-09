@@ -9,6 +9,7 @@
 #include "p9_transport.h"
 
 #include <IOKit/IOLib.h>
+#include <libkern/libkern.h>
 #include <libkern/OSAtomic.h>
 #include <sys/errno.h>
 
@@ -122,11 +123,13 @@ bool io_virtio_Virtio9P::deviceStart()
     UInt32 availOff, usedOff, features;
 
     /* The I/O BAR, mapped; failing that, its port number, for IOPCIDevice's own I/O mapping. */
+    P9_TRACE("device: map");
     fIO = fPCI->mapDeviceMemoryWithRegister(kConfigBAR0);
     fIOBase = (UInt16) (fPCI->configRead32(kConfigBAR0) & ~(UInt32) 3);
     cmd = fPCI->configRead16(kConfigCommand);
     fPCI->configWrite16(kConfigCommand, cmd | kCommandIO | kCommandBusMaster);
 
+    P9_TRACE("device: reset");
     deviceReset();
     wr8(kVirtioStatus, kStatusAcknowledge);
     wr8(kVirtioStatus, kStatusAcknowledge | kStatusDriver);
@@ -135,6 +138,7 @@ bool io_virtio_Virtio9P::deviceStart()
     if (!(features & kFeatureMountTag) || !readTag())
         goto fail;
 
+    P9_TRACE("device: queue");
     /* The one queue, requestq. */
     wr16(kVirtioQueueSel, 0);
     fQueueNum = rd16(kVirtioQueueNum);
@@ -149,6 +153,7 @@ bool io_virtio_Virtio9P::deviceStart()
     availOff = 16 * fQueueNum;
     usedOff = roundPage(availOff + 6 + 2 * fQueueNum);
     fRingSize = usedOff + roundPage(6 + 8 * fQueueNum);
+    P9_TRACE("device: ring");
     fRing = (UInt8 *) IOMallocContiguous(fRingSize, kPage, &fRingPhys);
     if (!fRing)
         goto fail;
@@ -163,6 +168,7 @@ bool io_virtio_Virtio9P::deviceStart()
     fNextAvail  = 0;
     *fAvailFlags = kAvailNoInterrupt;   /* polled */
 
+    P9_TRACE("device: buffers");
     /* The two message buffers, and the one descriptor chain that always carries them. */
     for (fBufSize = kBufSize; fBufSize >= kBufSizeMin; fBufSize /= 2) {
         fTBuf = (UInt8 *) IOMallocContiguous(fBufSize, kPage, &fTBufPhys);
@@ -185,6 +191,7 @@ bool io_virtio_Virtio9P::deviceStart()
     fDesc[1].flags    = kDescWrite;
     fDesc[1].next     = 0;
 
+    P9_TRACE("device: pfn");
     barrier();
     wr32(kVirtioQueuePFN, fRingPhys / kPage);
     wr8(kVirtioStatus, kStatusAcknowledge | kStatusDriver | kStatusDriverOK);
@@ -246,6 +253,7 @@ bool io_virtio_Virtio9P::start(IOService *provider)
     if (!super::start(provider))
         return false;
 
+    P9_TRACE("start: the device");
     fPCI = OSDynamicCast(IOPCIDevice, provider);
     if (!fPCI)
         return false;

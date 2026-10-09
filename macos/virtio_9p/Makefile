@@ -106,7 +106,8 @@ KPI_CC_I386    ?= gcc-4.0
 KPI_CC_X86_64  ?= gcc-4.2
 KPI_KH_I386     = $(KPI_SDK_I386)/System/Library/Frameworks/Kernel.framework/Headers
 KPI_KH_X86_64   = $(KPI_SDK_X86_64)/System/Library/Frameworks/Kernel.framework/Headers
-KPI_CFLAGS      = -mkernel -nostdinc -fno-builtin -fno-common -finline -fno-keep-inline-functions -Os -Wall \
+KPI_TRACE       = $(if $(TRACE),-DVIRTIO9P_TRACE)
+KPI_CFLAGS      = $(KPI_TRACE) -mkernel -nostdinc -fno-builtin -fno-common -finline -fno-keep-inline-functions -Os -Wall \
                   -DKERNEL -DKERNEL_PRIVATE -DDRIVER_PRIVATE -DAPPLE -DNeXT -DP9FS_KPI \
                   -DVIRTIO9P_VERSION='"$(VERSION)"'
 KPI_CXXFLAGS    = -fapple-kext -fno-rtti -fno-exceptions -fcheck-new
