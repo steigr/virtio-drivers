@@ -172,7 +172,8 @@ Version 0.2.0, the one source for both platforms, 2026-10-09/10 in the cluster:
   the `ip_opts` one.
 - Intel, the device beside the e1000 (above), the kext loaded by hand, `test.sh` 11 of 11 (8 MB
   echoed): 10.5.8 (the 10.4 bundle), 10.6.8 (64-bit kernel; the release `snowleopard-guest`),
-  10.7.5, 10.8.5, 10.9.5, 10.10.5, 10.11.6 and 10.12.6 (the 10.6 bundle). On 10.4.11 the kext
+  10.7.5, 10.8.5, 10.9.5, 10.10.5, 10.11.6, 10.12.6 and 10.13.6 (the 10.6 bundle; 10.13's approval
+  of third-party kexts did not stop it under OpenCore's `csr-active-config`). On 10.4.11 the kext
   loaded, attached and named the interface (`en1`, interrupt-driven), and Tiger then panicked in
   its pmap, as it does without it (TODO.md's "Tiger panics in its pmap when it is given work"), so
   no traffic test there yet.
@@ -183,7 +184,7 @@ Version 0.2.0, the one source for both platforms, 2026-10-09/10 in the cluster:
 
 ## Not yet
 
-- 10.13 to 10.15: the same test, when their guests are free.
+- 10.14 and 10.15: the same test, when their guests are free.
 - 10.4 traffic, past Tiger's pmap panics.
 - The orchestrator still gives 10.4 to 10.15 an e1000 (`internal/machine/presets.go`); making
   virtio-net their NIC needs the kext there before the installed system's first boot (OpenCore's
