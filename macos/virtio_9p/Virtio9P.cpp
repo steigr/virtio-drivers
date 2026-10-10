@@ -9,7 +9,9 @@
 #include "p9_transport.h"
 
 #include <IOKit/IOLib.h>
-#include <libkern/libkern.h>
+#ifdef VIRTIO9P_TRACE
+#include <libkern/libkern.h>     /* printf, for P9_TRACE; not in every release's headers */
+#endif
 #include <libkern/OSAtomic.h>
 #include <sys/errno.h>
 

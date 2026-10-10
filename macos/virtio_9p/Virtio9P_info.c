@@ -11,7 +11,9 @@
  */
 
 #include <mach/mach_types.h>
-#include <libkern/libkern.h>
+#ifdef VIRTIO9P_TRACE
+#include <libkern/libkern.h>     /* printf, for P9_TRACE; not in every release's headers */
+#endif
 #include "p9_transport.h"
 
 extern int p9fs_register(void);
