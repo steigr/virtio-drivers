@@ -105,10 +105,14 @@ What the Intel releases needed, each found live:
   an `MH_KEXT_BUNDLE` slice: on 10.5.8 it hung in the kernel, and the next try panicked it
   ("Unexpected kernel trap number: 0xe"), while the same kext thinned with `ditto --arch i386`
   loaded at once (2026-10-10). The install thins it on Darwin 8 and 9.
-- **Unsigned.** 10.11 to 10.13 load it because SIP is off (`csr-active-config` 0x7F in the
-  chart's OpenCore configuration); 10.10 needs `kext-dev-mode=1`, which the orchestrator now adds to
-  every Intel release's boot-args (internal/firmware/opencore, `vmBootArgs`): without it 10.10.5
-  refused it as "not loadable (reason unspecified)" (2026-10-10).
+- **Unsigned, and SIP.** 10.10 loads an unsigned kext only with `kext-dev-mode=1`, which the
+  orchestrator adds to every Intel release's boot-args (internal/firmware/opencore, `vmBootArgs`):
+  without it 10.10.5 refused it as "not loadable (reason unspecified)" (2026-10-10). 10.11 to 10.13
+  run with SIP on, which keeps an unsigned kext out and `/sbin` and `/System` read-only ("cp:
+  /sbin/mount_9p.new: Operation not permitted", 10.11.6, 2026-10-10): the orchestrator sets their
+  `csr-active-config` to let an unsigned and an unapproved kext load and nothing more
+  (`FirmwareSettings.UnsignedKexts`), and the Intel client lives where SIP lets it --
+  `/Library/Extensions/Virtio9P.kext` and `/usr/local/sbin/mount_9p`.
 - **Byte order.** The descriptors' 64-bit address is one field in the guest's order; the rings and
   the device's configuration were the guest's order already, and 9P is put together a byte at a
   time.
