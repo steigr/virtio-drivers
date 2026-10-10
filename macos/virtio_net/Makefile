@@ -8,7 +8,7 @@
 #
 # Leaves build/<ABI>/VirtioNet.kext.
 
-VERSION ?= 0.1.0
+VERSION ?= 0.2.0
 ABI     ?= gcc2
 
 # As for VirtioConsole, the GCC 2.95 build must see 10.0's Kernel.framework and kmod libraries,
