@@ -161,15 +161,37 @@ QEMU's mac99 in the `cheetah-guest`, `jaguar-guest` and `panther-guest` pods, `-
 - Polled (`Polled` set to `true`, 10.2.8, loaded at boot): 11 of 11, pings 1 to 11 ms (6 average),
   16 MB echoed at 3.2 MB/s each way.
 
+Version 0.2.0, the one source for both platforms, 2026-10-09/10 in the cluster:
+
+- PowerPC, each in place of the add-ons' 0.1 as the guest's only NIC (`virtio-net-pci` on passt),
+  installed in `/System/Library/Extensions` and the guest restarted: `gcc2` (built on `puma-guest`,
+  10.1.5, with 10.0's headers and kmod libraries) on 10.0.4 (`cheetah-guest`, an 8 MB TCP echo intact
+  at 4 MB/s each way) and 10.1.5 (`puma-guest`, the first live 10.1 run: an 8 MB file over HTTP with its
+  MD5); `gcc3` (built on `jaguar-guest`, 10.2.8) on 10.2.8 (8 MB at 7.2 MB/s, MD5 intact) and 10.3.9
+  (`panther-guest`, 8 MB echo intact at 2 MB/s). The `gcc3` build without warnings, `gcc2` with only
+  the `ip_opts` one.
+- Intel, the device beside the e1000 (above), the kext loaded by hand, `test.sh` 11 of 11 (8 MB
+  echoed): 10.5.8 (the 10.4 bundle), 10.6.8 (64-bit kernel; the release `snowleopard-guest`),
+  10.7.5, 10.8.5, 10.9.5, 10.10.5, 10.11.6 and 10.12.6 (the 10.6 bundle). On 10.4.11 the kext
+  loaded, attached and named the interface (`en1`, interrupt-driven), and Tiger then panicked in
+  its pmap, as it does without it (TODO.md's "Tiger panics in its pmap when it is given work"), so
+  no traffic test there yet.
+- Once on 10.2.8, the first restart after swapping the kext in ended at the panic screen with no
+  log to read (OpenBIOS keeps no panic NVRAM); the guest booted with the new kext on the next
+  restart and on every one after, and 10.0 to 10.3 were then swapped with `Extensions.mkext`
+  deleted first, which none of them minded.
+
 ## Not yet
 
-- 10.1 live: the `puma-guest` test pod has no virtio-net device. The `gcc2` build runs on 10.0.4 and
-  loads on 10.1.5.
+- 10.13 to 10.15: the same test, when their guests are free.
+- 10.4 traffic, past Tiger's pmap panics.
+- The orchestrator still gives 10.4 to 10.15 an e1000 (`internal/machine/presets.go`); making
+  virtio-net their NIC needs the kext there before the installed system's first boot (OpenCore's
+  `Kernel/Add` from 10.6 on, `/System/Library/Extensions` on 10.4 and 10.5).
 - QEMU's `set_link` (the STATUS feature and its configuration interrupt): the test pods' QMP socket
   has one client, the orchestrator.
 - Checksum offload, mergeable buffers, the control queue (receive filtering, MAC changes),
-  multiqueue; 10.4 and later, which have virtio-net drivers of their own to borrow from
-  (pmj/virtio-net-osx).
+  multiqueue (pmj/virtio-net-osx has some of it for 10.5 and later).
 
 ## References
 
