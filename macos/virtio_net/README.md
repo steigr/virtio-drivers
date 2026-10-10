@@ -2,7 +2,7 @@
 
 A Mac OS X kernel extension that drives QEMU's virtio network device, `virtio-net-pci`
 (1af4:1000), as an Ethernet port: for PowerPC Mac OS X 10.0 to 10.3 and for Intel Mac OS X 10.4 to
-macOS 10.15, from one source (Big Sur and later have Apple's own driver). It is an
+macOS 10.14, from one source (10.15 and later have Apple's own driver, AppleVirtIONetwork). It is an
 `IOEthernetController`: IONetworkingFamily makes an `en<n>` of it, and the BSD stack, configd and
 the Network preferences treat it as any other Ethernet interface. See `VirtioNet.h` for the design.
 
@@ -68,7 +68,7 @@ One binary, two slices:
 | Slice | Compiler, SDK | For | Mach-O |
 | --- | --- | --- | --- |
 | i386 | GCC 4.0, 10.4u SDK | the 32-bit kernels of 10.4 to 10.7 | relocatable object (`-r`), as 10.4 and 10.5 load |
-| x86_64 | GCC 4.2, 10.6 SDK | the 64-bit kernels of 10.6 on, the only kind from 10.8 | kext bundle (`-Xlinker -kext`) |
+| x86_64 | GCC 4.2, 10.6 SDK | the 64-bit kernels of 10.6 to 10.14 (the only kind from 10.8) | kext bundle (`-Xlinker -kext`) |
 
 The libraries are the KPIs at 8.0.0 (Darwin 8, 10.4) and IOPCIFamily and IONetworkingFamily at
 1.0.0b1 (`libraries-kpi.xml`): what `kextlibs` asks for, at the oldest version every release
@@ -184,7 +184,11 @@ Version 0.2.0, the one source for both platforms, 2026-10-09/10 in the cluster:
 
 ## Not yet
 
-- 10.14 and 10.15: the same test, when their guests are free.
+- 10.14: its SIP is fully on in the test guest ("Untrusted kexts are not allowed", the kext
+  staged and refused), so it is loaded by OpenCore's injection or not at all; not yet run that way.
+  10.15 needs none of this: Apple's AppleVirtIONetwork (com.apple.driver.AppleVirtIO) drives the
+  device -- on 10.15.8, 2026-10-10, it took 10.0.2.15 by DHCP and answered pings at 0.3 ms -- so
+  VirtioNet is not for 10.15, and is not to be put where it would compete with that driver.
 - 10.4 traffic, past Tiger's pmap panics.
 - The orchestrator still gives 10.4 to 10.15 an e1000 (`internal/machine/presets.go`); making
   virtio-net their NIC needs the kext there before the installed system's first boot (OpenCore's
