@@ -6,7 +6,7 @@
 #   make ABI=gcc3   on 10.2 with the December 2002 tools (GCC 3):    for 10.2 and 10.3, PowerPC
 #   make ABI=kpi    on 10.6 with Xcode 3.2.6:                       for 10.4 to 10.15, Intel
 #
-# Leaves build/<ABI>/VirtioNet.kext.
+# Leaves build/<ABI>/VirtioNet.kext; `make ABI=kpi intel` also the two Intel bundles, build/intel.
 
 VERSION ?= 0.2.0
 ABI     ?= gcc2
@@ -81,6 +81,19 @@ build/kpi/VirtioNet.x86_64: $(KPI_SRCS) VirtioNet.h
 build/kpi/VirtioNet: build/kpi/VirtioNet.i386 build/kpi/VirtioNet.x86_64
 	lipo -create -output $@ build/kpi/VirtioNet.i386 build/kpi/VirtioNet.x86_64
 
+# What the Intel releases are given, by the oldest release each serves: 10.6/ the universal kext,
+# 10.4/ its i386 slice alone. 10.5 refuses the universal one -- its kextload says "Executable file
+# doesn't contain kernel extension code" of a binary whose x86_64 slice is a kext bundle, a file
+# type it does not know (live, 10.5.8, 2026-10-10), and loads the thinned one -- while 10.6 and
+# later need that slice. 10.4's tools pass over it, but are given the same as 10.5.
+#   make ABI=kpi intel
+intel: $(KEXT)
+	rm -rf build/intel
+	mkdir -p build/intel/10.4 build/intel/10.6
+	cp -R $(KEXT) build/intel/10.6/
+	cp -R $(KEXT) build/intel/10.4/
+	lipo -thin i386 -output build/intel/10.4/VirtioNet.kext/Contents/MacOS/VirtioNet $(KEXT)/Contents/MacOS/VirtioNet
+
 ifneq ($(ABI),kpi)
 $(BUILD)/VirtioNet.o: VirtioNet.cpp VirtioNet.h
 	mkdir -p $(BUILD)
@@ -110,4 +123,4 @@ $(KEXT): $(BUILD)/VirtioNet Info.plist.in libraries-$(ABI).xml
 clean:
 	rm -rf build
 
-.PHONY: all clean
+.PHONY: all intel clean
