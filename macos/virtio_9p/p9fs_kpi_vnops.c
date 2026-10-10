@@ -59,7 +59,7 @@ p9_ctxgid(vfs_context_t ctx)
 static void
 p9_pushmapped(struct p9mount *pm, vnode_t vp)
 {
-    if (!ubc_pages_resident(vp))
+    if (!P9_UBC_RESIDENT(vp))
         return;
     P9_UNLOCK(pm);
     P9_UBC_SYNC(vp, (off_t) 0, ubc_getsize(vp), UBC_PUSHDIRTY | UBC_SYNC);
@@ -70,7 +70,7 @@ p9_pushmapped(struct p9mount *pm, vnode_t vp)
 static void
 p9_dropmapped(struct p9mount *pm, vnode_t vp, off_t start, off_t end)
 {
-    if (!ubc_pages_resident(vp) || end <= start)
+    if (!P9_UBC_RESIDENT(vp) || end <= start)
         return;
     P9_UNLOCK(pm);
     P9_UBC_SYNC(vp, start, end, UBC_INVALIDATE);
@@ -672,7 +672,7 @@ out:
     P9_UNLOCK(pm);
     FREE(buf, M_TEMP);
     (void) ubc_setsize(vp, (off_t) size);
-    if (ubc_pages_resident(vp) && uio_offset(uio) > start)
+    if (P9_UBC_RESIDENT(vp) && uio_offset(uio) > start)
         P9_UBC_SYNC(vp, start, uio_offset(uio), UBC_INVALIDATE);
     return error;
 }
@@ -685,7 +685,7 @@ p9fs_fsync(struct vnop_fsync_args *ap)
     struct p9mount *pm = np->n_pm;
     int error = 0;
 
-    if (ubc_pages_resident(vp))
+    if (P9_UBC_RESIDENT(vp))
         P9_UBC_SYNC(vp, (off_t) 0, ubc_getsize(vp), UBC_PUSHDIRTY | UBC_SYNC);
     P9_LOCK(pm);
     if (np->n_wfid != P9_NOFID)

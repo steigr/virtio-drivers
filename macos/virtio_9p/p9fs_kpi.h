@@ -20,6 +20,16 @@
 #define P9_UBC_SYNC(vp, start, end, flags)  ((void) ubc_sync_range((vp), (start), (end), (flags)))
 #endif
 
+/* Whether a file has pages in the cache at all, to spare the calls above when it has none. 10.4's
+ * kernel does not export ubc_pages_resident, though its headers declare it: 10.4.11 refused the
+ * kext with "kld(): Undefined symbols: _ubc_pages_resident" (2026-10-10). So the i386 slice, which
+ * 10.4 loads, asks no one and makes the calls; with no pages they have nothing to do. */
+#ifdef P9FS_UBC_MSYNC
+#define P9_UBC_RESIDENT(vp)                 ubc_pages_resident(vp)
+#else
+#define P9_UBC_RESIDENT(vp)                 1
+#endif
+
 extern struct vnodeopv_desc p9fs_vnodeop_opv_desc;
 
 #endif /* !_P9FS_KPI_H */
