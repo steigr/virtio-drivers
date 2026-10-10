@@ -105,14 +105,15 @@ What the Intel releases needed, each found live:
   an `MH_KEXT_BUNDLE` slice: on 10.5.8 it hung in the kernel, and the next try panicked it
   ("Unexpected kernel trap number: 0xe"), while the same kext thinned with `ditto --arch i386`
   loaded at once (2026-10-10). The install thins it on Darwin 8 and 9.
-- **Unsigned, and SIP.** 10.10 loads an unsigned kext only with `kext-dev-mode=1`, which the
-  orchestrator adds to every Intel release's boot-args (internal/firmware/opencore, `vmBootArgs`):
-  without it 10.10.5 refused it as "not loadable (reason unspecified)" (2026-10-10). 10.11 to 10.13
-  run with SIP on, which keeps an unsigned kext out and `/sbin` and `/System` read-only ("cp:
-  /sbin/mount_9p.new: Operation not permitted", 10.11.6, 2026-10-10): the orchestrator sets their
-  `csr-active-config` to let an unsigned and an unapproved kext load and nothing more
-  (`FirmwareSettings.UnsignedKexts`), and the Intel client lives where SIP lets it --
-  `/Library/Extensions/Virtio9P.kext` and `/usr/local/sbin/mount_9p`.
+- **Unsigned, and SIP.** 10.10 to 10.13 load no unsigned kext from disk: 10.10.5 refused it as
+  "not loadable (reason unspecified)", and 10.11 to 10.13 run with SIP on, which keeps it out and
+  `/sbin` and `/System` read-only ("cp: /sbin/mount_9p.new: Operation not permitted", 10.11.6,
+  2026-10-10). So on those releases OpenCore injects the kext at boot (Kernel > Add, from the
+  installed disk's ESP, put there by the install: internal/installer/releases/legacyintel), SIP and
+  the boot-args stay as they are, and guestshare installs `mount_9p` alone, in
+  `/usr/local/sbin`. 10.4 to 10.9 are given the kext in `/Library/Extensions`. (`kext-dev-mode=1`
+  and SIP's unsigned-kext bits did load it, live on 10.10 to 10.13 on 2026-10-10, and were taken
+  out again: the guests' own security settings stay the release's.)
 - **Byte order.** The descriptors' 64-bit address is one field in the guest's order; the rings and
   the device's configuration were the guest's order already, and 9P is put together a byte at a
   time.
@@ -185,7 +186,10 @@ modes and times, makes and lists 300 files, runs `/bin/echo` and `/bin/ls` copie
 
 ## Not yet
 
-- 10.9 to 10.13 and 10.4 live, and `test.sh` on the Intel releases (they were checked by hand: below).
+- 10.10 to 10.13 with the kext injected by OpenCore: they passed with it loaded from
+  `/Library/Extensions` under `kext-dev-mode=1` and SIP's unsigned-kext bits (below), not yet
+  the way they get it now.
+- `test.sh` on the Intel releases (they were checked by hand and by the gauntlet: below).
 - Interrupts instead of polling; more than one message with the device at a time.
 - 10.0 and 10.3 live: the `gcc2` build's imports are all in 10.0's kernel and the `gcc3` build
   is 10.2's, but neither has been run there yet.
@@ -213,6 +217,12 @@ modes and times, makes and lists 300 files, runs `/bin/echo` and `/bin/ls` copie
   `umount`, `kextunload` -- on 10.5.8 (i386, thinned), 10.6.8, 10.7.5 and 10.8.5 (x86_64); on
   10.6.8 `kextunload` was refused while mounted. Through guestshare on 10.7.5: installed, loaded and
   mounted within five seconds, and on the next boot loaded by itself and mounted.
+
+- Intel, 2026-10-10, the gauntlet from nothing on orchestrator `1705d3f` (the kext from
+  `/Library/Extensions`, let in by `kext-dev-mode=1` and SIP's unsigned-kext bits), its `9pfs`
+  check "read and written both ways through share on /Volumes/share (9p)": 10.10.5, 10.11.6,
+  10.12.6 and 10.13.6. Through guestshare on 10.9.5: installed, loaded and mounted on the first
+  boot and on the second.
 
 ## References
 
