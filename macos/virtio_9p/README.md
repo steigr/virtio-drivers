@@ -1,12 +1,15 @@
 # Virtio9P
 
 A Mac OS X kernel extension that mounts a QEMU virtio 9P share (VirtFS): a host directory as a
-filesystem in the guest, for PowerPC Mac OS X 10.0 to 10.3. One kext holds two things:
+filesystem in the guest, for Mac OS X 10.0 to 10.13 -- PowerPC 10.0 to 10.3, and Intel 10.4 to
+10.13, which have no virtio 9P client of their own (Apple's AppleVirtIO9P is 10.14's). One source,
+and one kext per build, holding two things:
 
 - an IOKit driver (`Virtio9P.cpp`) for QEMU's legacy virtio 9P transport, `virtio-9p-pci`
   (1af4:1009), which reads the device's mount tag and carries 9P messages over its one virtqueue;
-- a filesystem, `9p` (`p9fs_*.c`), a 9P2000.L client for the BSD VFS these releases have before
-  10.4's KPI, mounted with `mount_9p`.
+- a filesystem, `9p`, a 9P2000.L client (`p9fs_proto.c`) with a frontend for each VFS: the BSD
+  one of 10.0 to 10.3 (`p9fs_bsd_*.c`) and the KPI of 10.4 on (`p9fs_kpi_*.c`), mounted with
+  `mount_9p`.
 
 See `p9fs.h` for the layers and their locking, and `Virtio9P.h` for the device side.
 
@@ -78,6 +81,40 @@ VirtioConsole's build, and why:
 - `p9fs_vnops.c` declares what 10.2's Kernel.framework lacks headers for (`sys/unistd.h`,
   `sys/signalvar.h`, and so `vfs/vfs_support.h`).
 
+## Intel
+
+`make ABI=kpi`, on Snow Leopard with Xcode 3.2.6 from its retail DVD, builds the KPI frontend
+into one kext with two slices -- i386 against 10.4's KPI with GCC 4.0, linked as the relocatable
+object every 32-bit `kextload` takes; x86_64 against 10.6's with GCC 4.2, linked as the
+`MH_KEXT_BUNDLE` the 64-bit kernels require -- and `mount_9p` as a universal program against 10.4's
+libSystem. `build-intel.sh` does all of it in the cluster's `snowleopard-guest` (claim it first: other
+sessions use the releases too) and leaves `guest/dist/virtio9p-intel.tar.gz`, which
+`make guest-addons-embed` embeds in the orchestrator; its guestshare controller installs it in a
+guest of 10.4 to 10.13 that lacks it or has another build (internal/controllers/guestshare), and
+the kext then loads at every boot when the device is on the bus.
+
+What the Intel releases needed, each found live:
+
+- **No funnel.** The x86_64 kernels have none, so the KPI frontend is thread-safe: a lock per
+  mount, held across an operation's messages and given up around everything that can come back
+  in (`p9fs.h`'s "Locking, KPI frontend").
+- **The C++ runtime is the kernel's on x86_64.** 10.6's 64-bit kernel sets a kext's C++ up and
+  tears it down itself and exports neither call ("_OSRuntimeInitializeCPP ... unresolved", 10.6.8,
+  2026-10-10); `Virtio9P_info.c`'s start and stop only add and remove the filesystem there.
+- **10.4 and 10.5 take the i386 slice alone.** Their `kextload` cannot read a universal kext with
+  an `MH_KEXT_BUNDLE` slice: on 10.5.8 it hung in the kernel, and the next try panicked it
+  ("Unexpected kernel trap number: 0xe"), while the same kext thinned with `ditto --arch i386`
+  loaded at once (2026-10-10). The install thins it on Darwin 8 and 9.
+- **Unsigned.** 10.11 to 10.13 load it because SIP is off (`csr-active-config` 0x7F in the
+  chart's OpenCore configuration); 10.10 needs `kext-dev-mode=1`, which that configuration's
+  boot-args now carry.
+- **Byte order.** The descriptors' 64-bit address is one field in the guest's order; the rings and
+  the device's configuration were the guest's order already, and 9P is put together a byte at a
+  time.
+
+`TRACE=1` builds say each step of the kext's start on the console, for a kernel that panics before
+anything else would.
+
 ## Rebuilding, step by step
 
 Guests: a 10.1 one with the December 2001 tools and a 10.2 one with the December 2002 tools
@@ -143,7 +180,7 @@ modes and times, makes and lists 300 files, runs `/bin/echo` and `/bin/ls` copie
 
 ## Not yet
 
-- 10.4 and later: their VFS is the KPI (`vnode_t`, `vfs_fsadd`), a port of the filesystem half.
+- 10.9 to 10.13 and 10.4 live, and `test.sh` on the Intel releases (they were checked by hand: below).
 - Interrupts instead of polling; more than one message with the device at a time.
 - 10.0 and 10.3 live: the `gcc2` build's imports are all in 10.0's kernel and the `gcc3` build
   is 10.2's, but neither has been run there yet.
@@ -164,6 +201,13 @@ modes and times, makes and lists 300 files, runs `/bin/echo` and `/bin/ls` copie
 
 - The same builds rebuilt from this tree in the guests and run again, 2026-10-01: `gcc2` on 10.1.5 and
   `gcc3` on 10.2.8, no compiler warnings, `test.sh` 32 of 32 on each.
+
+- Intel, 2026-10-10, the `kpi` build of this tree (QEMU in the cluster's pods, a transitional
+  `virtio-9p-pci` with mount tag `share`): loaded, mounted, a 2-3 MB file read with the pod's
+  SHA-256 and one written back with it, `mkdir`, `ln -s`, `mv`, a binary run from the share, `df`,
+  `umount`, `kextunload` -- on 10.5.8 (i386, thinned), 10.6.8, 10.7.5 and 10.8.5 (x86_64); on
+  10.6.8 `kextunload` was refused while mounted. Through guestshare on 10.7.5: installed, loaded and
+  mounted within five seconds, and on the next boot loaded by itself and mounted.
 
 ## References
 

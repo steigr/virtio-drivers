@@ -12,8 +12,9 @@
  * on -- so the same restrictions hold: no templates, exceptions, RTTI or C++ library, and only
  * what 10.0's kernel and IOPCIFamily export.
  *
- * Built a third time for the Intel releases, against the KPI of 10.4 on (ABI=kpi, README.md's
- * "Intel"), where the same restrictions are kept so that this file stays one source.
+ * Built a third time for the Intel releases, against the KPI of 10.4 on (ABI=kpi,
+ * guest/drivers/virtio9p/README.md's "Intel"), where the same restrictions are kept so that this
+ * file stays one source.
  *
  * Legacy (0.9.5) virtio-pci, no feature but the mount tag negotiated, rings in the guest's own
  * byte order -- big-endian on PowerPC, little-endian on Intel -- so that nothing in them is ever
