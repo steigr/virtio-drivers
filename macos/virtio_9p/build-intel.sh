@@ -21,7 +21,7 @@ ISO=${1:-}
 RELEASE=${RELEASE:-snowleopard-guest}
 KUBE_CONTEXT=${KUBE_CONTEXT:-$KUBE_CONTEXT}
 NAMESPACE=${NAMESPACE:-macos}
-PORT=${PORT:-8097}
+PORT=${PORT:-8094}
 PACKAGES="DeveloperToolsSystemSupport VersionedDeveloperToolsSystemSupport DeveloperToolsCLI DevSDK gcc4.0 gcc4.2 MacOSX10.4.Universal MacOSX10.5 MacOSX10.6"
 
 here=$(cd "$(dirname "$0")" && pwd)
