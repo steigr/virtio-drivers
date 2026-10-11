@@ -33,7 +33,10 @@ configured like any other: in the Network preferences, or by hand:
 - The interrupt is registered only while the interface is up (0.2.2). Registered and left
   disabled, a source on a shared INTx gets the vector masked when an interrupt arrives, and every
   device on the line with it: on q35 an attached-but-never-up second NIC (slot 6) took the guest
-  agent's pci-serial (slot 2) down with it, extended gauntlet, 2026-10-11.
+  agent's pci-serial (slot 2) down with it, extended gauntlet, 2026-10-11. With 0.2.2 the same
+  machine -- 10.6.8 installed from nothing, the NIC at slot 6 beside the pci-serial, VirtioNet
+  injected by OpenCore from the installed ESP -- passed: "interrupt-driven while up", "interface
+  attached", `en1`, and the agent answered 87 requests in two minutes.
 - Interrupt-driven where the platform routes the device's PCI interrupt, which OpenBIOS on QEMU's
   mac99 does: 10.0.4, 10.2.8 and 10.3.9 all took it. Where it cannot be had, the driver polls every
   10 ms; and if, after it had one, received packets wait two watchdog seconds with no interrupt,
