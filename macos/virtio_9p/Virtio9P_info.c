@@ -16,8 +16,17 @@
 #endif
 #include "p9_transport.h"
 
+#ifdef P9FS_KPI
+/* The 10.4-on build adds the filesystem once BSD is up, which its start may come before when the
+ * kext is prelinked (Virtio9P.cpp, p9fs_register_when_bsd). */
+extern int p9fs_register_when_bsd(void);
+extern int p9fs_unregister_when_bsd(void);
+#define p9fs_register       p9fs_register_when_bsd
+#define p9fs_unregister     p9fs_unregister_when_bsd
+#else
 extern int p9fs_register(void);
 extern int p9fs_unregister(void);
+#endif
 
 #if defined(__x86_64__)
 /*

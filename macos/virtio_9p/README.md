@@ -116,6 +116,12 @@ What the Intel releases needed, each found live:
   unspecified)", 10.9.5, 2026-10-11). (`kext-dev-mode=1`
   and SIP's unsigned-kext bits did load it, live on 10.10 to 10.13 on 2026-10-10, and were taken
   out again: the guests' own security settings stay the release's.)
+- **Started before BSD.** A prelinked kext -- injected by OpenCore, or in the prelinked kernel
+  10.7 on build from `/System/Library/Extensions` -- is started from IOKit's first matching, before
+  the kernel's VFS is set up: adding the filesystem there panicked 10.10.5 on every boot ("type
+  14=page fault" in `_vfs_fsadd` from `_p9fs_register`, 2026-10-11). The KPI build adds it when the
+  kernel publishes the `IOBSD` resource, which is at once when it is loaded later
+  (`Virtio9P.cpp`'s `p9fs_register_when_bsd`).
 - **Byte order.** The descriptors' 64-bit address is one field in the guest's order; the rings and
   the device's configuration were the guest's order already, and 9P is put together a byte at a
   time.

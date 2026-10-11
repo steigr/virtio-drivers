@@ -397,3 +397,86 @@ extern "C" int p9t_rpc(void *handle, unsigned int tlen, unsigned int *rlen)
     *rlen = n;
     return err;
 }
+
+#ifdef P9FS_KPI
+/* ------------------------------------------------------------------------------------------ */
+/* Adding the filesystem once BSD is up (Virtio9P_info.c)                                      */
+/* ------------------------------------------------------------------------------------------ */
+
+/*
+ * The kmod's start may run before the kernel's VFS is: a kext that is prelinked -- injected by
+ * OpenCore on 10.10 to 10.13, or in the prelinked kernel 10.7 on build from
+ * /System/Library/Extensions -- is started from IOKit's first matching, and vfs_fsadd then
+ * dereferenced NULL ("Kernel trap ... type 14=page fault" in _vfs_fsadd from _p9fs_register, from
+ * OSKext::start from _IOConfigThread::main, on every boot of 10.10.5, live 2026-10-11). The kernel
+ * publishes the IOBSD resource once BSD, VFS among it, is set up; the filesystem is added when it
+ * is published, which is at once when the kext is loaded later (kextload).
+ */
+extern "C" int p9fs_register(void);
+extern "C" int p9fs_unregister(void);
+
+static IONotifier *gBSDNotifier;
+static volatile UInt32 gRegistered;
+
+static void p9fs_bsd_up(void)
+{
+    if (!OSCompareAndSwap(0, 1, &gRegistered))
+        return;
+    P9_TRACE("register: BSD is up");
+    if (p9fs_register() != 0) {
+        gRegistered = 0;
+        IOLog("Virtio9P: the 9p filesystem could not be added\n");
+    }
+}
+
+#if defined(__x86_64__)
+static bool p9fs_bsd_published(void *target, void *ref, IOService *service, IONotifier *notifier)
+{
+    p9fs_bsd_up();
+    return true;
+}
+#else
+static bool p9fs_bsd_published(void *target, void *ref, IOService *service)
+{
+    p9fs_bsd_up();
+    return true;
+}
+#endif
+
+/* Asks for the filesystem to be added once BSD is up: 0, or an errno. */
+extern "C" int p9fs_register_when_bsd(void)
+{
+    OSDictionary *match = IOService::resourceMatching("IOBSD");
+
+    if (!match)
+        return ENOMEM;
+#if defined(__x86_64__)
+    /* 10.6's x86_64 KPI: addNotification is gone, and addMatchingNotification does not consume
+     * the dictionary. */
+    gBSDNotifier = IOService::addMatchingNotification(gIOPublishNotification, match, p9fs_bsd_published);
+    match->release();
+#else
+    /* 10.4's KPI, which the i386 slice is built against: addNotification consumes it. */
+    gBSDNotifier = IOService::addNotification(gIOPublishNotification, match, p9fs_bsd_published);
+#endif
+    return gBSDNotifier ? 0 : ENOMEM;
+}
+
+/* Takes the filesystem away, or the wish to add it: 0, or EBUSY while a 9p filesystem is mounted,
+ * and then it stays. */
+extern "C" int p9fs_unregister_when_bsd(void)
+{
+    if (gBSDNotifier) {
+        gBSDNotifier->remove();
+        gBSDNotifier = 0;
+    }
+    if (gRegistered) {
+        if (p9fs_unregister() != 0) {
+            (void) p9fs_register_when_bsd();
+            return EBUSY;
+        }
+        gRegistered = 0;
+    }
+    return 0;
+}
+#endif /* P9FS_KPI */
