@@ -150,6 +150,8 @@ private:
     void     serviceTx();
     void     updateLink();
     void     interruptOccurred(int count);
+    bool     interruptAttach();
+    void     interruptDetach();
     void     timeoutOccurred();
 
     static bool interruptFilter(OSObject *owner, IOFilterInterruptEventSource *src);
@@ -167,7 +169,7 @@ private:
     IOMemoryMap                  *fIO;
     UInt16                        fIOBase;      /* the I/O BAR's port, used when it could not be mapped */
     IOWorkLoop                   *fWorkLoop;
-    IOFilterInterruptEventSource *fInterrupt;   /* 0 when polled */
+    IOFilterInterruptEventSource *fInterrupt;   /* 0 when polled, and while the interface is down */
     IOTimerEventSource           *fTimer;
     IOEthernetInterface          *fNetif;
     IOOutputQueue                *fOutputQueue;

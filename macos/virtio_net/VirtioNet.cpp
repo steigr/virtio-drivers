@@ -501,7 +501,7 @@ void io_virtio_VirtioNet::timeoutOccurred()
     if (fRx.lastUsed != *fRx.usedIdx && fInterrupts == fInterruptsSeen) {
         if (++fQuietTicks >= kQuietTicksMax) {
             IOLog("VirtioNet: received packets raise no interrupt; polling every %d ms instead\n", kPollMS);
-            fInterrupt->disable();
+            interruptDetach();
             fPolled = true;
             *fRx.availFlags = kAvailNoInterrupt;
             *fTx.availFlags = kAvailNoInterrupt;
@@ -517,6 +517,39 @@ void io_virtio_VirtioNet::timeoutOccurred()
 /* ------------------------------------------------------------------------------------------ */
 /* the controller                                                                              */
 /* ------------------------------------------------------------------------------------------ */
+
+/*
+ * The device's interrupt is registered only while the interface is up, and given back when it goes
+ * down. A filter source registered and left disabled is what a shared INTx cannot afford: an
+ * interrupt that arrives on a vector whose source is disabled gets the vector masked -- and with it
+ * every other device on the line. Live in the extended gauntlet, 2026-10-11: on q35 the second
+ * virtio NIC (slot 6) shares its PIRQ with the pci-serial (slot 2) the guest agent talks over; the
+ * NIC was attached and never brought up, and the agent received nothing on every boot with it.
+ */
+bool io_virtio_VirtioNet::interruptAttach()
+{
+    if (fInterrupt)
+        return true;
+    fInterrupt = IOFilterInterruptEventSource::filterInterruptEventSource(this, interruptAction,
+                                                                          interruptFilter, fPCI, 0);
+    if (fInterrupt && fWorkLoop->addEventSource(fInterrupt) == kIOReturnSuccess)
+        return true;
+    if (fInterrupt)
+        fInterrupt->release();
+    fInterrupt = 0;
+    return false;
+}
+
+void io_virtio_VirtioNet::interruptDetach()
+{
+    if (!fInterrupt)
+        return;
+    fInterrupt->disable();
+    if (fWorkLoop)
+        fWorkLoop->removeEventSource(fInterrupt);
+    fInterrupt->release();
+    fInterrupt = 0;
+}
 
 bool io_virtio_VirtioNet::start(IOService *provider)
 {
@@ -546,17 +579,6 @@ bool io_virtio_VirtioNet::start(IOService *provider)
     fTimer = IOTimerEventSource::timerEventSource(this, timeoutAction);
     if (!fTimer || fWorkLoop->addEventSource(fTimer) != kIOReturnSuccess)
         goto fail;
-    if (!fPolled) {
-        fInterrupt = IOFilterInterruptEventSource::filterInterruptEventSource(this, interruptAction,
-                                                                              interruptFilter, provider, 0);
-        if (!fInterrupt || fWorkLoop->addEventSource(fInterrupt) != kIOReturnSuccess) {
-            IOLog("VirtioNet: the device's interrupt cannot be had; polling every %d ms instead\n", kPollMS);
-            if (fInterrupt)
-                fInterrupt->release();
-            fInterrupt = 0;
-            fPolled = true;
-        }
-    }
 
     /* One medium, always selected: the link is whatever QEMU's backend is. */
     fMediumDict = OSDictionary::withCapacity(1);
@@ -575,7 +597,7 @@ bool io_virtio_VirtioNet::start(IOService *provider)
     IOLog("VirtioNet: %02x:%02x:%02x:%02x:%02x:%02x, I/O at 0x%x%s, %d receive and %d transmit slots, %s\n",
           fMAC.bytes[0], fMAC.bytes[1], fMAC.bytes[2], fMAC.bytes[3], fMAC.bytes[4], fMAC.bytes[5],
           fIOBase, fIO ? "" : " (through the bridge)", fRx.slots, fTx.slots,
-          fPolled ? "polled" : "interrupt-driven");
+          fPolled ? "polled" : "interrupt-driven while up");
 
     /*
      * Ask to be en0. On PowerPC, 10.2 and 10.3's InterfaceNamer keeps unit 0 for the interface the
@@ -611,10 +633,9 @@ void io_virtio_VirtioNet::stop(IOService *provider)
     fEnabled = false;
     if (fTimer)
         fTimer->cancelTimeout();
-    if (fInterrupt)
-        fInterrupt->disable();
     if (fPCI && (fIO || fIOBase))
         deviceReset();
+    interruptDetach();
     if (fPCI && fPCI->isOpen(this))
         fPCI->close(this);
     super::stop(provider);
@@ -637,14 +658,9 @@ bool io_virtio_VirtioNet::terminate(IOOptionBits options)
 
 void io_virtio_VirtioNet::free()
 {
-    if (fWorkLoop) {
-        if (fInterrupt)
-            fWorkLoop->removeEventSource(fInterrupt);
-        if (fTimer)
-            fWorkLoop->removeEventSource(fTimer);
-    }
-    if (fInterrupt)
-        fInterrupt->release();
+    interruptDetach();
+    if (fWorkLoop && fTimer)
+        fWorkLoop->removeEventSource(fTimer);
     if (fTimer)
         fTimer->release();
     if (fNetif)
@@ -698,13 +714,23 @@ IOReturn io_virtio_VirtioNet::enable(IONetworkInterface *)
 {
     if (fEnabled)
         return kIOReturnSuccess;
-    if (!deviceStart())
+    /* Registered and enabled while the device is still reset and cannot assert, so that no
+     * interrupt of its finds the source registered and disabled (interruptAttach); the filter
+     * passes on anything that is not the device's. Before deviceStart, which asks for interrupts
+     * in the rings only when not polled. */
+    if (!fPolled && !interruptAttach()) {
+        IOLog("VirtioNet: the device's interrupt cannot be had; polling every %d ms instead\n", kPollMS);
+        fPolled = true;
+    }
+    if (fInterrupt)
+        fInterrupt->enable();
+    if (!deviceStart()) {
+        interruptDetach();
         return kIOReturnIOError;
+    }
     fEnabled = true;
     fQuietTicks = 0;
     fInterruptsSeen = fInterrupts;
-    if (fInterrupt && !fPolled)
-        fInterrupt->enable();
     fTimer->setTimeoutMS(fPolled ? kPollMS : kWatchdogMS);
     fLinkReported = false;
     updateLink();
@@ -723,9 +749,8 @@ IOReturn io_virtio_VirtioNet::disable(IONetworkInterface *)
     fOutputQueue->setCapacity(0);
     fOutputQueue->flush();
     fTimer->cancelTimeout();
-    if (fInterrupt)
-        fInterrupt->disable();
-    deviceReset();
+    deviceReset();      /* first: a device that can no longer assert gives back its interrupt */
+    interruptDetach();
     setLinkStatus(0, 0);
     return kIOReturnSuccess;
 }

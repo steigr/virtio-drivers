@@ -30,6 +30,10 @@ configured like any other: in the Network preferences, or by hand:
 - Without the control queue the device does not filter: every frame on the link reaches the
   guest, as on a hub, and the stack drops what is not for it. Promiscuous and multicast requests
   are accepted and change nothing.
+- The interrupt is registered only while the interface is up (0.2.2). Registered and left
+  disabled, a source on a shared INTx gets the vector masked when an interrupt arrives, and every
+  device on the line with it: on q35 an attached-but-never-up second NIC (slot 6) took the guest
+  agent's pci-serial (slot 2) down with it, extended gauntlet, 2026-10-11.
 - Interrupt-driven where the platform routes the device's PCI interrupt, which OpenBIOS on QEMU's
   mac99 does: 10.0.4, 10.2.8 and 10.3.9 all took it. Where it cannot be had, the driver polls every
   10 ms; and if, after it had one, received packets wait two watchdog seconds with no interrupt,
