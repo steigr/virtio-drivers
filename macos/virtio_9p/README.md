@@ -111,7 +111,9 @@ What the Intel releases needed, each found live:
   2026-10-10). So on those releases OpenCore injects the kext at boot (Kernel > Add, from the
   installed disk's ESP, put there by the install: internal/installer/releases/legacyintel), SIP and
   the boot-args stay as they are, and guestshare installs `mount_9p` alone, in
-  `/usr/local/sbin`. 10.4 to 10.9 are given the kext in `/Library/Extensions`. (`kext-dev-mode=1`
+  `/usr/local/sbin`. 10.4 to 10.9 are given the kext in `/System/Library/Extensions`, not
+  `/Library/Extensions`, where 10.9 loads only a signed kext ("not loadable (reason
+  unspecified)", 10.9.5, 2026-10-11). (`kext-dev-mode=1`
   and SIP's unsigned-kext bits did load it, live on 10.10 to 10.13 on 2026-10-10, and were taken
   out again: the guests' own security settings stay the release's.)
 - **Byte order.** The descriptors' 64-bit address is one field in the guest's order; the rings and
