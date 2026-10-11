@@ -416,7 +416,9 @@ extern "C" int p9fs_register(void);
 extern "C" int p9fs_unregister(void);
 
 static IONotifier *gBSDNotifier;
-static volatile UInt32 gRegistered;
+/* Not volatile: 10.4's OSCompareAndSwap takes a plain UInt32 *, and every other access is a
+ * single store. */
+static UInt32 gRegistered;
 
 static void p9fs_bsd_up(void)
 {
@@ -453,11 +455,14 @@ extern "C" int p9fs_register_when_bsd(void)
 #if defined(__x86_64__)
     /* 10.6's x86_64 KPI: addNotification is gone, and addMatchingNotification does not consume
      * the dictionary. */
-    gBSDNotifier = IOService::addMatchingNotification(gIOPublishNotification, match, p9fs_bsd_published);
+    gBSDNotifier = IOService::addMatchingNotification(gIOPublishNotification, match,
+                                                      (IOServiceMatchingNotificationHandler) &p9fs_bsd_published,
+                                                      0, 0, 0);
     match->release();
 #else
     /* 10.4's KPI, which the i386 slice is built against: addNotification consumes it. */
-    gBSDNotifier = IOService::addNotification(gIOPublishNotification, match, p9fs_bsd_published);
+    gBSDNotifier = IOService::addNotification(gIOPublishNotification, match,
+                                              (IOServiceNotificationHandler) &p9fs_bsd_published, 0, 0, 0);
 #endif
     return gBSDNotifier ? 0 : ENOMEM;
 }
