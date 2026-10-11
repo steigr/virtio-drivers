@@ -597,6 +597,7 @@ bool io_virtio_VirtioNet::start(IOService *provider)
     if (!attachInterface((IONetworkInterface **) &fNetif, false))
         goto fail;
     fNetif->registerService();
+    IOLog("VirtioNet: interface attached\n");
     return true;
 
 fail:
@@ -709,6 +710,7 @@ IOReturn io_virtio_VirtioNet::enable(IONetworkInterface *)
     updateLink();
     fOutputQueue->setCapacity(kOutputQueueSize);
     fOutputQueue->start();
+    IOLog("VirtioNet: %s%d up\n", fNetif->getNamePrefix(), (int) fNetif->getUnitNumber());
     return kIOReturnSuccess;
 }
 

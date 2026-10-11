@@ -184,6 +184,11 @@ Version 0.2.0, the one source for both platforms, 2026-10-09/10 in the cluster:
 
 ## Not yet
 
+- 10.14 with OpenCore's injection (the extended gauntlet, 2026-10-11, 0.2.0): VirtioNet started on
+  one boot and on the next did not, AppleVirtIO's generic AppleVirtIOPCITransport holding a virtio
+  device with nothing on it, and no interface either time. 0.2.1 asks for the device with
+  IOProbeScore 50000 so that it wins that match, and logs "interface attached" and "en<n> up";
+  not yet run.
 - 10.14: its SIP is fully on in the test guest ("Untrusted kexts are not allowed", the kext
   staged and refused), so it is loaded by OpenCore's injection or not at all; not yet run that way.
   10.15 needs none of this: Apple's AppleVirtIONetwork (com.apple.driver.AppleVirtIO) drives the
