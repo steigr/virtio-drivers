@@ -64,7 +64,7 @@ another architecture again, with two kernels of its own.
     make ABI=intel                                                               # on 10.6
 
 Each leaves `build/<ABI>/VirtioBlock.kext`. The build and copy steps are
-`../ppc/virtio9p/README.md`'s "Rebuilding, step by step" with `virtioblock` for `virtio9p`. Unlike
+`../virtio9p/README.md`'s "Rebuilding, step by step" with `virtioblock` for `virtio9p`. Unlike
 VirtioNet's, the `gcc2` build needs no `-fpermissive` (that was `netinet/in.h` through
 IOEthernetController.h), and neither build declares `com.apple.kernel.bsd`: no BSD symbol is used.
 The library `com.apple.iokit.IOStorageFamily` is asked for at 1.0.0b1 (an assumption, see below).
