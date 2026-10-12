@@ -194,13 +194,8 @@ modes and times, makes and lists 300 files, runs `/bin/echo` and `/bin/ls` copie
 
 ## Not yet
 
-- 10.10 to 10.13 with the kext injected by OpenCore: they passed with it loaded from
-  `/Library/Extensions` under `kext-dev-mode=1` and SIP's unsigned-kext bits (below), not yet
-  the way they get it now.
 - `test.sh` on the Intel releases (they were checked by hand and by the gauntlet: below).
 - Interrupts instead of polling; more than one message with the device at a time.
-- 10.0 and 10.3 live: the `gcc2` build's imports are all in 10.0's kernel and the `gcc3` build
-  is 10.2's, but neither has been run there yet.
 
 ## Evidence
 
@@ -231,6 +226,11 @@ modes and times, makes and lists 300 files, runs `/bin/echo` and `/bin/ls` copie
   check "read and written both ways through share on /Volumes/share (9p)": 10.10.5, 10.11.6,
   10.12.6 and 10.13.6. Through guestshare on 10.9.5: installed, loaded and mounted on the first
   boot and on the second.
+
+- Every release from 10.0 to 10.13, 2026-10-11/12: the gauntlet from nothing on orchestrator
+  `493d061` with this kext built from `b43f141`, `9pfs` "read and written both ways". 10.4 to
+  10.9 with the kext in `/System/Library/Extensions`, 10.10 to 10.13 with it injected by OpenCore:
+  no boot panicked, and Yosemite's share mounted with the prelinked kext and no `kextload`.
 
 ## References
 
