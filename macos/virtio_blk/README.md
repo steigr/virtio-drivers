@@ -49,7 +49,7 @@ Utility initialises it.
 
 ## Why it is built three times, and in the guests
 
-As VirtioConsole and VirtioNet (`../ppc/virtioconsole/README.md`, `../ppc/virtionet/README.md`):
+As VirtioConsole and VirtioNet (`../ppc/virtioconsole/README.md`, `../virtionet/README.md`):
 the kernel's C++ ABI differs between GCC 2.95 (10.0, 10.1) and GCC 3 (10.2 on); and Intel is
 another architecture again, with two kernels of its own.
 
