@@ -14,7 +14,7 @@
  * 32-bit kernel, 10.4 to 10.7) and an x86_64 slice (the 10.6 SDK: every 64-bit kernel, 10.6 to
  * 10.15). So no templates, exceptions, RTTI or C++ library, and only what 10.0's kernel,
  * IOPCIFamily and IOStorageFamily export. No BSD symbol is used, so the gcc2 build declares no
- * com.apple.kernel.bsd (see ../ppc/virtio9p).
+ * com.apple.kernel.bsd (see ../virtio9p).
  *
  * What differs between them is kept to a few lines, each under the #if that says why:
  * - Byte order. A legacy device keeps its rings and configuration in the guest's order, big-endian
