@@ -10,7 +10,7 @@
 # Leaves build/<ABI>/VirtioVsock.kext; `make ABI=kpi intel` also the two Intel bundles and an Intel
 # vsockcat, build/intel.
 
-VERSION ?= 0.2.0
+VERSION ?= 0.2.1
 ABI     ?= gcc2
 
 # As for VirtioConsole, the GCC 2.95 build must see 10.0's Kernel.framework and kmod libraries,

@@ -291,6 +291,20 @@ bool io_virtio_VirtioVsock::mapBar(UInt8 bar)
 {
     if (bar > 5)
         return false;
+    /* A 64-bit BAR above 4 GB cannot be mapped by a 32-bit kernel, which keeps only its low half:
+     * live on 10.4.11 (2026-10-12) the firmware put the device's BAR 4 above 4 GB, the platform
+     * expert recorded 0x4000 for it ("assigned-addresses"), the mapping read zeros there, and the
+     * driver found no VIRTIO_F_VERSION_1. Such a BAR is left unmapped, and its registers are reached through the
+     * PCI_CFG capability's window instead. A 64-bit kernel maps it whole. */
+    if (sizeof(IOPhysicalAddress) < 8 && bar < 5) {
+        UInt32 lo = fPCI->configRead32(0x10 + 4 * bar);
+
+        if ((lo & 0x7) == 0x4 && fPCI->configRead32(0x10 + 4 * bar + 4) != 0) {
+            IOLog("VirtioVsock: BAR %d is at %08x%08x, above what this kernel can map\n", bar,
+                  (unsigned int) fPCI->configRead32(0x10 + 4 * bar + 4), (unsigned int) (lo & ~0xFU));
+            return false;
+        }
+    }
     if (!fMaps[bar])
         fMaps[bar] = fPCI->mapDeviceMemoryWithRegister(0x10 + 4 * bar);
     return fMaps[bar] != 0;
@@ -1347,6 +1361,13 @@ bool io_virtio_VirtioVsock::start(IOService *provider)
 
     if (!deviceProbe())
         goto fail;
+    /* Registers reached through the configuration window take several accesses each, which an
+     * interrupt filter reading the ISR would interleave with the work loop's: polled, everything
+     * is on the work loop. */
+    if (!fISRReg.virt && !fPolled) {
+        IOLog("VirtioVsock: the registers are reached through the PCI configuration window; polling every %d ms\n", kPollMS);
+        fPolled = true;
+    }
 
     fTimer = IOTimerEventSource::timerEventSource(this, timeoutAction);
     if (!fTimer || fWorkLoop->addEventSource(fTimer) != kIOReturnSuccess)
