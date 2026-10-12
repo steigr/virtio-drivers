@@ -189,13 +189,22 @@ Version 0.2.0, the one source for both platforms, 2026-10-09/10 in the cluster:
   restart and on every one after, and 10.0 to 10.3 were then swapped with `Extensions.mkext`
   deleted first, which none of them minded.
 
+- The extended gauntlet, 2026-10-12 (the guest image, every release installed from nothing, an
+  attach-only second virtio NIC beside a second virtio disk in the default slots): 0.2.2 named
+  `en1` on every Intel release from 10.4 to 10.14 -- from /System/Library/Extensions on 10.4 and
+  10.5, injected by OpenCore on 10.6 to 10.14 (10.9 and 10.10 once IONetworkingFamily was forced
+  into their prelinked kernel) -- with the guest agent's pci-serial unharmed; 10.15 used Apple's
+  AppleVirtIONetwork; PowerPC 10.0 to 10.3 passed their network item with the 0.2.0 add-ons. The
+  grid is docs/gauntlet/2026-10-12-extended in the extended-gauntlet branch.
+- Before 0.2.1, 10.14 with OpenCore's injection: VirtioNet started on one boot and on the next did
+  not, AppleVirtIO's generic AppleVirtIOPCITransport holding the device with nothing on it. 0.2.1
+  asks for it with IOProbeScore 50000.
+
 ## Not yet
 
-- 10.14 with OpenCore's injection (the extended gauntlet, 2026-10-11, 0.2.0): VirtioNet started on
-  one boot and on the next did not, AppleVirtIO's generic AppleVirtIOPCITransport holding a virtio
-  device with nothing on it, and no interface either time. 0.2.1 asks for the device with
-  IOProbeScore 50000 so that it wins that match, and logs "interface attached" and "en<n> up";
-  not yet run.
+- The PowerPC add-ons rebuilt with 0.2.2 (the interrupt change applies to them too).
+- Traffic on 10.4 and 10.14: the gauntlet's check is attach-only, and Tiger's pmap panics stopped
+  the hand test; 10.5 to 10.13 moved 8 MB each by hand.
 - 10.14: its SIP is fully on in the test guest ("Untrusted kexts are not allowed", the kext
   staged and refused), so it is loaded by OpenCore's injection or not at all; not yet run that way.
   10.15 needs none of this: Apple's AppleVirtIONetwork (com.apple.driver.AppleVirtIO) drives the
