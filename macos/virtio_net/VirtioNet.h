@@ -17,7 +17,7 @@
  * exceptions, RTTI or C++ library, and only what 10.0's kernel, IOPCIFamily and IONetworkingFamily
  * 1.0.7 export. No BSD symbol is used either -- mbufs are allocated and freed through
  * IONetworkController and walked by their fields -- so that the gcc2 build, which cannot declare
- * com.apple.kernel.bsd (10.0's and 10.1's are mutually incompatible, see ../ppc/virtio9p), needs none.
+ * com.apple.kernel.bsd (10.0's and 10.1's are mutually incompatible, see ../virtio9p), needs none.
  *
  * The device side, from the virtio 0.9.5 (legacy PCI) specification and the virtio 1.x "Network
  * Device" chapter's legacy notes:

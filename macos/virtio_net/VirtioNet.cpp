@@ -645,7 +645,7 @@ void io_virtio_VirtioNet::stop(IOService *provider)
  * interface out of the BSD stack again: kextunload terminated the driver, unloaded the module and
  * said it succeeded, and en2 stayed listed by ifconfig with its controller freed and its code gone,
  * for the next ifconfig to call into (live, 10.2.8, 2026-10-01). kextunload terminates a module's
- * drivers before it unloads it and gives up at the first that refuses (../ppc/virtio9p). */
+ * drivers before it unloads it and gives up at the first that refuses (../virtio9p). */
 bool io_virtio_VirtioNet::terminate(IOOptionBits options)
 {
     if (fNetif) {

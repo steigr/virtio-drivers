@@ -36,7 +36,7 @@ CXXFLAGS = $(CFLAGS) -fno-rtti -fno-exceptions -fcheck-new $(CXXFLAGS_$(ABI))
 # in place of IOSerialFamily: 1.0.7 in 10.0's System.kext, 1.1 on 10.1, 1.2 on 10.2, 1.4.0 on
 # 10.3, each compatible back to 1.0.0b1 (read off the guests, 2026-10-01). No com.apple.kernel.bsd:
 # the driver uses no BSD symbol, and no one version of it satisfies both 10.0 and 10.1
-# (../ppc/virtio9p).
+# (../virtio9p).
 
 BUILD = build/$(ABI)
 KEXT  = $(BUILD)/VirtioNet.kext

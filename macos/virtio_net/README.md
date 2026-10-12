@@ -124,10 +124,10 @@ Each leaves `build/<ABI>/VirtioNet.kext`. What differs from VirtioConsole's buil
 - Both builds ask for `com.apple.iokit.IONetworkingFamily` 1.0.0b1. It is 1.0.7 inside 10.0's
   System.kext, 1.1 on 10.1, 1.2 on 10.2 and 1.4.0 on 10.3, each compatible back to 1.0.0b1.
 - Neither declares `com.apple.kernel.bsd` (no one version satisfies both 10.0 and 10.1, see
-  `../ppc/virtio9p`): the driver uses no BSD symbol. Mbufs are allocated and freed through
+  `../virtio9p`): the driver uses no BSD symbol. Mbufs are allocated and freed through
   IONetworkController and walked by their fields.
 
-The build and copy steps are `../ppc/virtio9p/README.md`'s "Rebuilding, step by step", with
+The build and copy steps are `../virtio9p/README.md`'s "Rebuilding, step by step", with
 `virtionet` for `virtio9p` and `VirtioNet.kext` for `Virtio9P.kext` (there is no `mount_9p`).
 
 ## Testing
