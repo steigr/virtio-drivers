@@ -172,6 +172,14 @@ way. The guest agent 0.3.0 on vsock port 7710 from the pod (AF_VSOCK): sync, pin
 1 MiB of `/mach_kernel` through `guest-file-read` at 3028 KB/s -- where the agent on pci-serial took
 30 s for the same megabyte.
 
+Intel 32-bit, 2026-10-12, `tiger-guest` (10.4.11): the firmware puts BAR 4 above 4 GB (0x800004000), which
+Tiger's 32-bit kernel records as 0x4000; 0.2.0 mapped that and read zeros. 0.2.1 leaves such a BAR
+unmapped and goes through the PCI_CFG window, polled ("BAR 4 is at 0000000800004000, above what this
+kernel can map"): the echo (4 MB in 1.6 s), the guest-to-host sha1 and the refusals passed, and from
+/System/Library/Extensions the guest's agent was on vsock from the host's first connection, 1 MB
+through `macos exec` in 1.1 s. A 32-bit process on Tiger, since Tiger runs a universal binary's
+x86_64 slice and has no 64-bit IOKit: `vsockcat` thinned to i386, as the installer thins the agent.
+
 ## Not yet
 
 - The PCI configuration window fallback (the BARs were always mappable), and the watchdog's switch
