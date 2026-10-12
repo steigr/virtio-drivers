@@ -194,4 +194,4 @@ the Finder's Applications window.
   `hw/input/virtio-input.c` (a report is held until slots for all of it are queued).
 - Apple's xnu-123.5 `iokit/Families/IOHIDSystem` (10.0), IOHIDFamily-34.12 (10.2) and -86.26
   (10.3): `IOHIPointing::dispatchAbsolutePointerEvent` and `IOHIDSystem::_scaleLocationToCurrentScreen`.
-- `../virtiovsock` here, whose modern virtio-pci transport this reuses.
+- `../../virtiovsock` here, whose modern virtio-pci transport this reuses.
