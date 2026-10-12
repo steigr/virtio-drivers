@@ -200,9 +200,12 @@ Version 0.2.0, the one source for both platforms, 2026-10-09/10 in the cluster:
   not, AppleVirtIO's generic AppleVirtIOPCITransport holding the device with nothing on it. 0.2.1
   asks for it with IOProbeScore 50000.
 
+- PowerPC with 0.2.2, 2026-10-12: the add-ons rebuilt by the local ladder (source 5a5184e) passed
+  `virtio-test` on 10.0 to 10.3, and installed from nothing in the cluster (the guest image) each
+  release passed the gauntlet with 0.2.2 as its only NIC, first attempt, no item failed.
+
 ## Not yet
 
-- The PowerPC add-ons rebuilt with 0.2.2 (the interrupt change applies to them too).
 - Traffic on 10.4 and 10.14: the gauntlet's check is attach-only, and Tiger's pmap panics stopped
   the hand test; 10.5 to 10.13 moved 8 MB each by hand.
 - 10.14: its SIP is fully on in the test guest ("Untrusted kexts are not allowed", the kext
