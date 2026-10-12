@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>English</string>
+	<key>CFBundleExecutable</key>
+	<string>VirtioBlock</string>
+	<key>CFBundleIdentifier</key>
+	<string>io.virtio.driver.VirtioBlock</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>VirtioBlock</string>
+	<key>CFBundlePackageType</key>
+	<string>KEXT</string>
+	<key>CFBundleShortVersionString</key>
+	<string>@VERSION@</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleVersion</key>
+	<string>@VERSION@</string>
+	<key>IOKitPersonalities</key>
+	<dict>
+		<!-- QEMU's virtio block device: virtio-blk-pci (1af4:1001, legacy or transitional).
+		     By vendor and device where IOPCIFamily matches IOPCIMatch, and by the name OpenBIOS
+		     gives the node where it matches names, as VirtioConsole's pci1af4,1003. device-type
+		     is what IOBlockStorageDriver looks for in its provider. Polled set to true makes the
+		     driver poll even where the device's interrupt could be had.
+		     IOUnit 0: IOApplePartitionScheme attaches each partition to the device tree under the
+		     first device-tree entry up the driver stack, the PCI device, at "@<IOUnit>:<partition>",
+		     and does not at all without an IOUnit; so the system's partition is
+		     /pci@f2000000/scsi@10/@0:2, which a root path of .../scsi@10/disk@0:2 names (boot-args
+		     rd=*<that path>; README.md). -->
+		<key>VirtioBlock</key>
+		<dict>
+			<key>CFBundleIdentifier</key>
+			<string>io.virtio.driver.VirtioBlock</string>
+			<key>IOClass</key>
+			<string>io_virtio_VirtioBlock</string>
+			<key>IOPCIMatch</key>
+			<string>0x10011af4</string>
+			<key>IOUnit</key>
+			<integer>0</integer>
+			<key>IOProviderClass</key>
+			<string>IOPCIDevice</string>
+			<key>device-type</key>
+			<string>Generic</string>
+			<key>Polled</key>
+			<false/>
+		</dict>
+		<key>VirtioBlockByName</key>
+		<dict>
+			<key>CFBundleIdentifier</key>
+			<string>io.virtio.driver.VirtioBlock</string>
+			<key>IOClass</key>
+			<string>io_virtio_VirtioBlock</string>
+			<key>IONameMatch</key>
+			<string>pci1af4,1001</string>
+			<key>IOUnit</key>
+			<integer>0</integer>
+			<key>IOProviderClass</key>
+			<string>IOPCIDevice</string>
+			<key>device-type</key>
+			<string>Generic</string>
+			<key>Polled</key>
+			<false/>
+		</dict>
+	</dict>
+	<!-- Local-Root: BootX loads the kext with the kernel, so a system on a virtio disk finds its root.
+	     BootX loads every kext that names any OSBundleRequired but "Safe Boot". -->
+	<key>OSBundleRequired</key>
+	<string>Local-Root</string>
+	<key>OSBundleLibraries</key>
+	<dict>
+@LIBRARIES@
+	</dict>
+</dict>
+</plist>
