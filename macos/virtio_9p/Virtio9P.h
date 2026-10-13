@@ -18,14 +18,21 @@
  *
  * Legacy (0.9.5) virtio-pci, no feature but the mount tag negotiated, rings in the guest's own
  * byte order -- big-endian on PowerPC, little-endian on Intel -- so that nothing in them is ever
- * swapped. Polled: a request is published and its completion watched for with a short spin and
- * then millisecond sleeps; the rings ask the device for no interrupt.
+ * swapped. Interrupt-driven where the device's interrupt can be had (0.2.0 on): a request is
+ * published on the driver's work loop and its caller sleeps on the command gate until the
+ * interrupt, or a watchdog that finds a reply no interrupt announced, wakes it; a watchdog that
+ * keeps finding them turns polling on. Polled otherwise, or with Polled true in the personality: a
+ * short spin, then millisecond sleeps, and the rings ask the device for no interrupt.
  */
 
 #ifndef _GR_STEI_VIRTIO9P_H
 #define _GR_STEI_VIRTIO9P_H
 
 #include <IOKit/IOService.h>
+#include <IOKit/IOWorkLoop.h>
+#include <IOKit/IOCommandGate.h>
+#include <IOKit/IOTimerEventSource.h>
+#include <IOKit/IOFilterInterruptEventSource.h>
 #include <IOKit/pci/IOPCIDevice.h>
 
 /* A split virtqueue, legacy layout; see VirtioConsole.h. The address is one 64-bit field in the
@@ -61,6 +68,17 @@ public:
     int      rpc(UInt32 tlen, UInt32 *rlen);
 
 private:
+    int      rpcPolled(UInt32 tlen, UInt32 *rlen);
+    int      rpcGated(UInt32 tlen, UInt32 *rlen);
+    void     publish(UInt32 tlen);
+    void     takeReply(UInt32 *rlen);
+    void     interruptOccurred();
+    void     timeoutOccurred();
+    static IOReturn rpcAction(OSObject *owner, void *arg0, void *arg1, void *arg2, void *arg3);
+    static bool     interruptFilter(OSObject *owner, IOFilterInterruptEventSource *src);
+    static void     interruptAction(OSObject *owner, IOInterruptEventSource *src, int count);
+    static void     timeoutAction(OSObject *owner, IOTimerEventSource *src);
+
     bool     deviceStart();
     void     deviceReset();
     bool     readTag();
@@ -94,6 +112,16 @@ private:
     UInt8              *fRBuf;          /* the reply buffer */
     IOPhysicalAddress   fRBufPhys;
     UInt32              fBufSize;
+
+    IOWorkLoop                   *fWorkLoop;
+    IOCommandGate                *fGate;
+    IOTimerEventSource           *fTimer;
+    IOFilterInterruptEventSource *fInterrupt;   /* 0 when polled from the start */
+    bool                fPolled;        /* replies are watched for, not announced */
+    bool                fWaiting;       /* a caller sleeps on the gate for a reply */
+    volatile UInt32     fInterrupts;    /* interrupts taken, */
+    UInt32              fInterruptsSeen;    /* as of the last watchdog tick */
+    UInt32              fQuietTicks;    /* ticks that found a reply no interrupt had announced */
 
     char                fTag[64];       /* the mount tag, NUL-terminated */
     UInt32              fClaimed;       /* a mount is using the device */

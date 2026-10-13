@@ -10,7 +10,7 @@
 # frontend (p9fs_bsd_*.c), the Intel one of the KPI frontend (p9fs_kpi_*.c); the device and the
 # protocol are every build's (p9fs.h).
 
-VERSION ?= 0.1.0
+VERSION ?= 0.2.0
 ABI     ?= gcc2
 
 # As for VirtioConsole, the GCC 2.95 build must see 10.0's Kernel.framework and kmod libraries,

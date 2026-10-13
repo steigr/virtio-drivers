@@ -15,6 +15,11 @@
 #include <libkern/OSAtomic.h>
 #include <sys/errno.h>
 
+/* Mach's wait states, which not every release's headers reach from IOKit's. */
+#ifndef THREAD_UNINT
+#define THREAD_UNINT 0
+#endif
+
 #define super IOService
 OSDefineMetaClassAndStructors(io_virtio_Virtio9P, IOService)
 
@@ -55,7 +60,15 @@ enum {
     kBufSize           = 65536,     /* each of the request and the reply buffer: the 9P msize */
     kBufSizeMin        = 8192,      /* what is tried when 64 KiB is not to be had contiguous */
     kSpinUS            = 10,        /* a reply is looked for this often at first, */
-    kSpins             = 200        /* this many times (2 ms), then every millisecond */
+    kSpins             = 200,       /* this many times (2 ms), then every millisecond */
+    kGatedSpins        = 50,        /* interrupt-driven, a reply is spun for this long first (0.5 ms), */
+    kWatchdogMS        = 50,        /* then slept for, with this watchdog; */
+    kPollMS            = 1,         /* polled after the watchdog gave up on the interrupt, */
+    kQuietTicksMax     = 2          /* which it does after this many ticks with a silent reply */
+};
+
+enum {
+    kISRQueue          = 0x01
 };
 
 enum {
@@ -74,6 +87,15 @@ static inline UInt32 roundPage(UInt32 n) { return (n + kPage - 1) & ~(UInt32)(kP
 static inline void barrier() { __asm__ __volatile__ ("sync" : : : "memory"); }
 #else
 static inline void barrier() { __asm__ __volatile__ ("" : : : "memory"); }
+#endif
+
+/* A store and a later load ordered against each other, which x86 does not do by itself: the
+ * interrupt asked for (a store the device reads) before the used index looked at again (a load the
+ * device writes), or the device may see no request for an interrupt and the driver no reply. */
+#if defined(__ppc__)
+static inline void fullBarrier() { __asm__ __volatile__ ("sync" : : : "memory"); }
+#else
+static inline void fullBarrier() { __asm__ __volatile__ ("mfence" : : : "memory"); }
 #endif
 
 /* With the BAR mapped, register offsets are relative to it; without, they are absolute I/O
@@ -212,14 +234,17 @@ fail:
  * for the length of a call. */
 int io_virtio_Virtio9P::rpc(UInt32 tlen, UInt32 *rlen)
 {
-    UInt32 spins = 0;
-    volatile Virtio9PUsedElem *e;
-
     if (fStopping || !fDeviceUp)
         return ENXIO;
     if (tlen > fBufSize)
         return EMSGSIZE;
+    if (!fInterrupt)
+        return rpcPolled(tlen, rlen);
+    return (int) fGate->runAction(rpcAction, (void *) (unsigned long) tlen, (void *) rlen);
+}
 
+void io_virtio_Virtio9P::publish(UInt32 tlen)
+{
     fDesc[0].len = tlen;
     fAvailRing[fNextAvail % fQueueNum] = 0;
     barrier();
@@ -227,7 +252,28 @@ int io_virtio_Virtio9P::rpc(UInt32 tlen, UInt32 *rlen)
     *fAvailIdx = fNextAvail;
     barrier();
     wr16(kVirtioQueueNotify, 0);
+}
 
+void io_virtio_Virtio9P::takeReply(UInt32 *rlen)
+{
+    volatile Virtio9PUsedElem *e;
+
+    barrier();
+    e = &fUsedRing[fLastUsed % fQueueNum];
+    *rlen = e->len;
+    fLastUsed++;
+    if (*rlen > fBufSize)
+        *rlen = fBufSize;
+}
+
+/* Without an interrupt: a short spin for the quick reply, then millisecond sleeps -- which are a
+ * scheduler tick, 10 ms, on the older kernels, and so what a reply slower than the spin waited for
+ * before 0.2.0. */
+int io_virtio_Virtio9P::rpcPolled(UInt32 tlen, UInt32 *rlen)
+{
+    UInt32 spins = 0;
+
+    publish(tlen);
     while (*fUsedIdx == fLastUsed) {
         if (fStopping)
             return ENXIO;
@@ -237,13 +283,108 @@ int io_virtio_Virtio9P::rpc(UInt32 tlen, UInt32 *rlen)
         } else
             IOSleep(1);
     }
-    barrier();
-    e = &fUsedRing[fLastUsed % fQueueNum];
-    *rlen = e->len;
-    fLastUsed++;
-    if (*rlen > fBufSize)
-        *rlen = fBufSize;
+    takeReply(rlen);
     return 0;
+}
+
+IOReturn io_virtio_Virtio9P::rpcAction(OSObject *owner, void *arg0, void *arg1, void *, void *)
+{
+    return (IOReturn) ((io_virtio_Virtio9P *) owner)->rpcGated((UInt32) (unsigned long) arg0, (UInt32 *) arg1);
+}
+
+/* On the work loop: a short spin first, with the device asked for no interrupt, since QEMU's
+ * server answers most messages in microseconds; then the caller sleeps on the gate, which lets the
+ * interrupt's action and the watchdog in, until one of them sees the reply. Slept for from the
+ * start, every message paid a wakeup: on Tiger 10.4.11 a 64 MB read took 0.26 s where the old
+ * spin-then-sleep took 0.19 s, a 32 MB write 0.20 s where it took 0.13 (2026-10-14). The spin is
+ * what kept those numbers; the sleep replaces the scheduler-tick sleeps a slower reply waited out.
+ * Uninterruptible: a caller woken by a signal with its message still with the device would leave
+ * it there for the next one's reply. */
+int io_virtio_Virtio9P::rpcGated(UInt32 tlen, UInt32 *rlen)
+{
+    UInt32 spins;
+
+    if (!fPolled)
+        *fAvailFlags = kAvailNoInterrupt;
+    publish(tlen);
+    for (spins = 0; spins < kGatedSpins && *fUsedIdx == fLastUsed; spins++)
+        IODelay(kSpinUS);
+    if (*fUsedIdx != fLastUsed) {
+        takeReply(rlen);
+        return 0;
+    }
+    if (!fPolled) {
+        /* Asked for the interrupt now, and looked again: a reply that came in between was told
+         * not to raise one. */
+        *fAvailFlags = 0;
+        fullBarrier();
+        if (*fUsedIdx != fLastUsed) {
+            takeReply(rlen);
+            return 0;
+        }
+    }
+    fWaiting = true;
+    fInterruptsSeen = fInterrupts;
+    fTimer->setTimeoutMS(fPolled ? kPollMS : kWatchdogMS);
+    while (*fUsedIdx == fLastUsed && !fStopping)
+        fGate->commandSleep((void *) &fLastUsed, THREAD_UNINT);
+    fWaiting = false;
+    fTimer->cancelTimeout();
+    if (*fUsedIdx == fLastUsed)
+        return ENXIO;
+    takeReply(rlen);
+    return 0;
+}
+
+/* At primary interrupt time: reading the ISR lowers the device's interrupt line. */
+bool io_virtio_Virtio9P::interruptFilter(OSObject *owner, IOFilterInterruptEventSource *)
+{
+    io_virtio_Virtio9P *me = (io_virtio_Virtio9P *) owner;
+
+    if (!(me->rd8(kVirtioISR) & kISRQueue))
+        return false;   /* someone else's, on a shared line */
+    OSIncrementAtomic((SInt32 *) &me->fInterrupts);
+    return true;
+}
+
+void io_virtio_Virtio9P::interruptAction(OSObject *owner, IOInterruptEventSource *, int)
+{
+    ((io_virtio_Virtio9P *) owner)->interruptOccurred();
+}
+
+void io_virtio_Virtio9P::interruptOccurred()
+{
+    if (fWaiting && *fUsedIdx != fLastUsed)
+        fGate->commandWakeup((void *) &fLastUsed, false);
+}
+
+void io_virtio_Virtio9P::timeoutAction(OSObject *owner, IOTimerEventSource *)
+{
+    ((io_virtio_Virtio9P *) owner)->timeoutOccurred();
+}
+
+/* While a caller waits: a reply that is there and that no interrupt announced -- the platform did
+ * not route the line -- wakes it, and twice in a row turns polling on for good. */
+void io_virtio_Virtio9P::timeoutOccurred()
+{
+    if (!fWaiting)
+        return;
+    if (*fUsedIdx != fLastUsed) {
+        if (!fPolled && fInterrupts == fInterruptsSeen && ++fQuietTicks >= kQuietTicksMax) {
+            IOLog("Virtio9P: replies raise no interrupt; polling every %d ms instead\n", kPollMS);
+            fInterrupt->disable();
+            *fAvailFlags = kAvailNoInterrupt;
+            fPolled = true;
+        }
+        fGate->commandWakeup((void *) &fLastUsed, false);
+        return;
+    }
+    fQuietTicks = 0;
+    fInterruptsSeen = fInterrupts;
+    if (fStopping)
+        fGate->commandWakeup((void *) &fLastUsed, false);
+    else
+        fTimer->setTimeoutMS(fPolled ? kPollMS : kWatchdogMS);
 }
 
 /* ------------------------------------------------------------------------------------------ */
@@ -265,6 +406,34 @@ bool io_virtio_Virtio9P::start(IOService *provider)
     if (!deviceStart())
         goto fail;
 
+    /* The interrupt, unless the personality says Polled: a caller then sleeps until its reply is
+     * announced, where it spun and then slept a scheduler tick at a time. */
+    {
+        OSBoolean *polled = OSDynamicCast(OSBoolean, getProperty("Polled"));
+
+        fWorkLoop = IOWorkLoop::workLoop();
+        if (fWorkLoop && !(polled && polled->isTrue())) {
+            fGate = IOCommandGate::commandGate(this);
+            fTimer = IOTimerEventSource::timerEventSource(this, timeoutAction);
+            fInterrupt = IOFilterInterruptEventSource::filterInterruptEventSource(this, interruptAction,
+                                                                                  interruptFilter, provider, 0);
+            if (!fGate || fWorkLoop->addEventSource(fGate) != kIOReturnSuccess ||
+                !fTimer || fWorkLoop->addEventSource(fTimer) != kIOReturnSuccess ||
+                !fInterrupt || fWorkLoop->addEventSource(fInterrupt) != kIOReturnSuccess) {
+                IOLog("Virtio9P: the device's interrupt cannot be had; polled\n");
+                if (fInterrupt) {
+                    fWorkLoop->removeEventSource(fInterrupt);
+                    fInterrupt->release();
+                }
+                fInterrupt = 0;
+            } else {
+                *fAvailFlags = 0;
+                fInterrupt->enable();
+            }
+        }
+        IOLog("Virtio9P: %s\n", fInterrupt ? "interrupt-driven" : "polled");
+    }
+
     /* Found by its tag when mount_9p asks for it (p9t_open), and shown in the registry. */
     setProperty("mount_tag", fTag);
     registerService();
@@ -279,6 +448,10 @@ fail:
 void io_virtio_Virtio9P::stop(IOService *provider)
 {
     fStopping = true;
+    if (fInterrupt)
+        fInterrupt->disable();
+    if (fGate)
+        fGate->commandWakeup((void *) &fLastUsed, false);
     if (fPCI && (fIO || fIOBase))
         deviceReset();
     if (fPCI && fPCI->isOpen(this))
@@ -304,6 +477,22 @@ bool io_virtio_Virtio9P::terminate(IOOptionBits options)
  * whose device has stopped gets ENXIO, not freed memory. */
 void io_virtio_Virtio9P::free()
 {
+    if (fWorkLoop) {
+        if (fInterrupt)
+            fWorkLoop->removeEventSource(fInterrupt);
+        if (fTimer)
+            fWorkLoop->removeEventSource(fTimer);
+        if (fGate)
+            fWorkLoop->removeEventSource(fGate);
+    }
+    if (fInterrupt)
+        fInterrupt->release();
+    if (fTimer)
+        fTimer->release();
+    if (fGate)
+        fGate->release();
+    if (fWorkLoop)
+        fWorkLoop->release();
     if (fRing)
         IOFreeContiguous(fRing, fRingSize);
     if (fTBuf)
