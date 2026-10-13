@@ -111,6 +111,7 @@ enum {
 enum {
     kCommandMemory     = 0x0002,
     kCommandBusMaster  = 0x0004,
+    kCommandIntxOff    = 0x0400,        /* PCI 2.3's Interrupt Disable */
     kConfigCommand     = 0x04,
     kConfigStatus      = 0x04,      /* the status is its upper half */
     kConfigCapPtr      = 0x34,
@@ -233,6 +234,25 @@ static inline UInt32 physHi(IOPhysicalAddress a)
 /* the transport                                                                               */
 /* ------------------------------------------------------------------------------------------ */
 
+/* Interrupts off on this CPU and back as they were, around a configuration-window access that the
+ * interrupt filter must not cut into. Spelled out because ml_set_interrupts_enabled, which
+ * IOSimpleLockLockDisableInterrupt is inline over, is not in the KPI 10.4 links against
+ * (xnu-792.25.20's config/*.exports). Intel only: PowerPC's BARs are mapped, never windowed. */
+#if defined(__i386__) || defined(__x86_64__)
+static inline unsigned long interruptsOff()
+{
+    unsigned long flags;
+
+    __asm__ __volatile__ ("pushf; pop %0; cli" : "=r" (flags) : : "memory");
+    return flags;
+}
+
+static inline void interruptsRestore(unsigned long flags)
+{
+    __asm__ __volatile__ ("push %0; popf" : : "r" (flags) : "memory", "cc");
+}
+#endif
+
 /* A register of one of the structures: through its mapping, or, where that could not be had,
  * through the PCI_CFG capability's window into the BAR. Values are the register's, in the host's
  * order. */
@@ -251,11 +271,21 @@ UInt32 io_virtio_VirtioVsock::regRead(VsockRegion *r, UInt32 off, int size)
     }
     if (!fCfgWindowOff)
         return 0;
-    fPCI->configWrite32(fCfgWindowOff + 4, r->bar);
-    fPCI->configWrite32(fCfgWindowOff + 8, r->offset + off);
-    fPCI->configWrite32(fCfgWindowOff + 12, size);
     {
-        UInt32 v = fPCI->configRead32(fCfgWindowOff + 16);
+        UInt32 v;
+#if defined(__i386__) || defined(__x86_64__)
+        unsigned long flags = interruptsOff();
+
+        IOSimpleLockLock(fWindowLock);
+#endif
+        fPCI->configWrite32(fCfgWindowOff + 4, r->bar);
+        fPCI->configWrite32(fCfgWindowOff + 8, r->offset + off);
+        fPCI->configWrite32(fCfgWindowOff + 12, size);
+        v = fPCI->configRead32(fCfgWindowOff + 16);
+#if defined(__i386__) || defined(__x86_64__)
+        IOSimpleLockUnlock(fWindowLock);
+        interruptsRestore(flags);
+#endif
         return size == 4 ? v : (v & ((1UL << (8 * size)) - 1));
     }
 }
@@ -274,10 +304,21 @@ void io_virtio_VirtioVsock::regWrite(VsockRegion *r, UInt32 off, int size, UInt3
     }
     if (!fCfgWindowOff)
         return;
-    fPCI->configWrite32(fCfgWindowOff + 4, r->bar);
-    fPCI->configWrite32(fCfgWindowOff + 8, r->offset + off);
-    fPCI->configWrite32(fCfgWindowOff + 12, size);
-    fPCI->configWrite32(fCfgWindowOff + 16, value);
+    {
+#if defined(__i386__) || defined(__x86_64__)
+        unsigned long flags = interruptsOff();
+
+        IOSimpleLockLock(fWindowLock);
+#endif
+        fPCI->configWrite32(fCfgWindowOff + 4, r->bar);
+        fPCI->configWrite32(fCfgWindowOff + 8, r->offset + off);
+        fPCI->configWrite32(fCfgWindowOff + 12, size);
+        fPCI->configWrite32(fCfgWindowOff + 16, value);
+#if defined(__i386__) || defined(__x86_64__)
+        IOSimpleLockUnlock(fWindowLock);
+        interruptsRestore(flags);
+#endif
+    }
 }
 
 UInt8  io_virtio_VirtioVsock::cfgRead8(UInt32 off)              { return (UInt8) regRead(&fCommon, off, 1); }
@@ -504,7 +545,8 @@ bool io_virtio_VirtioVsock::deviceProbe()
     UInt32 cmd, f0, f1;
 
     cmd = fPCI->configRead16(kConfigCommand);
-    fPCI->configWrite16(kConfigCommand, cmd | kCommandMemory | kCommandBusMaster);
+    /* INTx on: the interrupt is the device's only one, MSI-X being left off. */
+    fPCI->configWrite16(kConfigCommand, (cmd | kCommandMemory | kCommandBusMaster) & ~kCommandIntxOff);
 
     if (!findCaps()) {
         IOLog("VirtioVsock: the device has no usable modern virtio PCI capabilities\n");
@@ -1369,15 +1411,25 @@ bool io_virtio_VirtioVsock::start(IOService *provider)
     if (!fGate || fWorkLoop->addEventSource(fGate) != kIOReturnSuccess)
         goto fail;
 
+#if defined(__i386__) || defined(__x86_64__)
+    fWindowLock = IOSimpleLockAlloc();
+    if (!fWindowLock)
+        goto fail;
+#endif
     if (!deviceProbe())
         goto fail;
-    /* Registers reached through the configuration window take several accesses each, which an
-     * interrupt filter reading the ISR would interleave with the work loop's: polled, everything
-     * is on the work loop. */
+    /* Registers reached through the configuration window take several accesses each, which the
+     * interrupt filter reading the ISR would interleave with the work loop's. On Intel each access
+     * is made whole under fWindowLock with interrupts off, so the filter reads the ISR through the
+     * window like any other register, and the device is interrupt-driven: until 0.2.3 it was polled
+     * every 10 ms wherever its BAR was not mapped, which was 10.4, 10.5 and 10.8 to 10.11 (the
+     * gauntlet on 69b7e43, 2026-10-13). PowerPC's BAR is always mapped; it keeps the old rule. */
+#if !(defined(__i386__) || defined(__x86_64__))
     if (!fISRReg.virt && !fPolled) {
         IOLog("VirtioVsock: the registers are reached through the PCI configuration window; polling every %d ms\n", kPollMS);
         fPolled = true;
     }
+#endif
 
     fTimer = IOTimerEventSource::timerEventSource(this, timeoutAction);
     if (!fTimer || fWorkLoop->addEventSource(fTimer) != kIOReturnSuccess)
@@ -1401,8 +1453,9 @@ bool io_virtio_VirtioVsock::start(IOService *provider)
         fInterrupt->enable();
     fTimer->setTimeoutMS(fPolled ? kPollMS : kWatchdogMS);
 
-    IOLog("VirtioVsock: cid %u, %d receive and %d transmit slots, %s\n", (unsigned int) fCidLo,
-          fRx.slots, fTx.slots, fPolled ? "polled" : "interrupt-driven");
+    IOLog("VirtioVsock: cid %u, %d receive and %d transmit slots, %s%s\n", (unsigned int) fCidLo,
+          fRx.slots, fTx.slots, fPolled ? "polled" : "interrupt-driven",
+          fISRReg.virt ? "" : ", through the configuration window");
 
     registerService();
     return true;
@@ -1457,6 +1510,8 @@ void io_virtio_VirtioVsock::free()
     for (i = 0; i < 6; i++)
         if (fMaps[i])
             fMaps[i]->release();
+    if (fWindowLock)
+        IOSimpleLockFree(fWindowLock);
     if (fPCI)
         fPCI->release();
     if (fWorkLoop)

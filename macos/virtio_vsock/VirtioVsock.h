@@ -38,6 +38,7 @@
 #include <IOKit/IOTimerEventSource.h>
 #include <IOKit/IOFilterInterruptEventSource.h>
 #include <IOKit/IOUserClient.h>
+#include <IOKit/IOLocks.h>
 #include <IOKit/pci/IOPCIDevice.h>
 
 #include "VirtioVsockUser.h"
@@ -205,6 +206,7 @@ private:
     VsockRegion                   fCommon, fNotify, fISRReg, fDevice;
     UInt32                        fNotifyMult;
     UInt16                        fCfgWindowOff;    /* the PCI_CFG capability, 0 if none */
+    IOSimpleLock                 *fWindowLock;      /* one window access at a time (regRead) */
 
     VsockQueue                    fRx, fTx, fEv;
     UInt16                       *fTxFree;
