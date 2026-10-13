@@ -12,6 +12,7 @@
 
 #include <IOKit/IOLib.h>
 #include <IOKit/serial/IOSerialKeys.h>
+#include <libkern/OSAtomic.h>
 
 #define super IOSerialDriverSync
 OSDefineMetaClassAndStructors(io_virtio_VirtioConsole, IOSerialDriverSync)
@@ -48,7 +49,9 @@ enum {
     kRxBufferSize      = 1024,
     kTxBufferSize      = 4096,
     kPortQueueSize     = 16384,     /* each direction of the port */
-    kPollMS            = 10
+    kPollMS            = 10,        /* the timer's period when polled */
+    kWatchdogMS        = 1000,      /* and when the interrupt moves the bytes */
+    kQuietTicksMax     = 2          /* watchdog ticks with unannounced work before polling */
 };
 
 /* PCI configuration space, spelled out because 10.0's headers name only some of it. */
@@ -105,6 +108,7 @@ static inline void barrier() { __asm__ __volatile__ ("sync" : : : "memory"); }
 /* the device                                                                                  */
 /* ------------------------------------------------------------------------------------------ */
 
+static UInt8  rd8 (IOPCIDevice *pci, IOMemoryMap *map, UInt16 base, UInt16 off) { return pci->ioRead8(base + off, map); }
 static UInt16 rd16(IOPCIDevice *pci, IOMemoryMap *map, UInt16 base, UInt16 off) { return pci->ioRead16(base + off, map); }
 static UInt32 rd32(IOPCIDevice *pci, IOMemoryMap *map, UInt16 base, UInt16 off) { return pci->ioRead32(base + off, map); }
 static void   wr8 (IOPCIDevice *pci, IOMemoryMap *map, UInt16 base, UInt16 off, UInt8  v) { pci->ioWrite8 (base + off, v, map); }
@@ -306,11 +310,55 @@ void io_virtio_VirtioConsole::poll()
         moved = true;
     if (moved)
         setStateGated(queueState(), kQueueStateMask);
+}
+
+/* The timer: every 10 ms while the port is open, polled; every second otherwise, a watchdog. */
+void io_virtio_VirtioConsole::rearm()
+{
     if (fState & PD_S_ACTIVE)
-        fTimer->setTimeoutMS(kPollMS);
+        fTimer->setTimeoutMS(fPolled ? kPollMS : kWatchdogMS);
 }
 
 void io_virtio_VirtioConsole::pollAction(OSObject *owner, IOTimerEventSource *)
+{
+    ((io_virtio_VirtioConsole *) owner)->timeoutOccurred();
+}
+
+/* Interrupt-driven, work that turns up with no interrupt since the last tick -- the platform did
+ * not route the line -- twice in a row turns polling on for good. */
+void io_virtio_VirtioConsole::timeoutOccurred()
+{
+    if (!fPolled && fInterrupt) {
+        bool pending = fRx.lastUsed != *fRx.usedIdx || (fTxBusy && fTx.lastUsed != *fTx.usedIdx);
+
+        if (pending && fInterrupts == fInterruptsSeen) {
+            if (++fQuietTicks >= kQuietTicksMax) {
+                IOLog("VirtioConsole: the device raises no interrupt; polling every %d ms instead\n", kPollMS);
+                fInterrupt->disable();
+                fPolled = true;
+                *fRx.availFlags = kAvailNoInterrupt;
+                *fTx.availFlags = kAvailNoInterrupt;
+            }
+        } else
+            fQuietTicks = 0;
+        fInterruptsSeen = fInterrupts;
+    }
+    poll();
+    rearm();
+}
+
+/* At primary interrupt time: reading the ISR lowers the device's interrupt line. */
+bool io_virtio_VirtioConsole::interruptFilter(OSObject *owner, IOFilterInterruptEventSource *)
+{
+    io_virtio_VirtioConsole *me = (io_virtio_VirtioConsole *) owner;
+
+    if (!rd8(me->fPCI, me->fIO, me->fIO ? 0 : gIOBase, kVirtioISR))
+        return false;   /* someone else's, on a shared line */
+    OSIncrementAtomic((SInt32 *) &me->fInterrupts);
+    return true;
+}
+
+void io_virtio_VirtioConsole::interruptAction(OSObject *owner, IOInterruptEventSource *, int)
 {
     ((io_virtio_VirtioConsole *) owner)->poll();
 }
@@ -374,6 +422,29 @@ bool io_virtio_VirtioConsole::start(IOService *provider)
     if (!deviceStart())
         goto fail;
 
+    /* The interrupt, unless the personality says Polled. */
+    {
+        OSBoolean *polled = OSDynamicCast(OSBoolean, getProperty("Polled"));
+
+        fPolled = true;
+        if (!(polled && polled->isTrue())) {
+            fInterrupt = IOFilterInterruptEventSource::filterInterruptEventSource(this, interruptAction,
+                                                                                  interruptFilter, provider, 0);
+            if (!fInterrupt || fWorkLoop->addEventSource(fInterrupt) != kIOReturnSuccess) {
+                IOLog("VirtioConsole: the device's interrupt cannot be had; polling every %d ms\n", kPollMS);
+                if (fInterrupt)
+                    fInterrupt->release();
+                fInterrupt = 0;
+            } else {
+                fPolled = false;
+                *fRx.availFlags = 0;
+                *fTx.availFlags = 0;
+                fInterrupt->enable();
+            }
+        }
+        IOLog("VirtioConsole: %s\n", fPolled ? "polled" : "interrupt-driven");
+    }
+
     /* The port, as IOSerialFamily's BSD client finds it: /dev/cu.virtio-N and /dev/tty.virtio-N,
      * N the console's place by PCI address (consoleIndex). */
     fNub = new IORS232SerialStreamSync;
@@ -404,6 +475,8 @@ void io_virtio_VirtioConsole::stop(IOService *provider)
     }
     if (fTimer)
         fTimer->cancelTimeout();
+    if (fInterrupt)
+        fInterrupt->disable();
     if (fNub) {
         fNub->detach(this);
         fNub->release();
@@ -419,11 +492,15 @@ void io_virtio_VirtioConsole::stop(IOService *provider)
 void io_virtio_VirtioConsole::free()
 {
     if (fWorkLoop) {
+        if (fInterrupt)
+            fWorkLoop->removeEventSource(fInterrupt);
         if (fTimer)
             fWorkLoop->removeEventSource(fTimer);
         if (fGate)
             fWorkLoop->removeEventSource(fGate);
     }
+    if (fInterrupt)
+        fInterrupt->release();
     if (fTimer)
         fTimer->release();
     if (fGate)
@@ -478,7 +555,7 @@ void io_virtio_VirtioConsole::activate(bool on)
         if (fState & PD_S_ACTIVE)
             return;
         setStateGated(PD_S_ACTIVE, PD_S_ACTIVE);
-        fTimer->setTimeoutMS(kPollMS);
+        rearm();
     } else {
         if (!(fState & PD_S_ACTIVE))
             return;
@@ -797,6 +874,8 @@ IOReturn io_virtio_VirtioConsole::dequeueEventGated(UInt32 *event, UInt32 *data,
     fRxQ.head = (fRxQ.head + 1) % fRxQ.size;
     fRxQ.count--;
     setStateGated(queueState(), kQueueStateMask);
+    if (fRx.lastUsed != *fRx.usedIdx)
+        poll();     /* what the device received and did not fit has room now */
     return kIOReturnSuccess;
 }
 
@@ -873,8 +952,11 @@ IOReturn io_virtio_VirtioConsole::dequeueDataGated(UInt8 *buffer, UInt32 size, U
         fRxQ.head = (fRxQ.head + n) % fRxQ.size;
         fRxQ.count -= n;
         *count += n;
-        if (n)
+        if (n) {
             setStateGated(queueState(), kQueueStateMask);
+            if (fRx.lastUsed != *fRx.usedIdx)
+                poll();     /* what the device received and did not fit has room now */
+        }
         if (*count >= min || *count == size)
             break;
         {

@@ -20,9 +20,12 @@
  * exports. The line is virtual: baud rate, parity and flow control are accepted and remembered and
  * change nothing; carrier, CTS and DSR are always asserted.
  *
- * Polled: a timer on the work loop moves bytes between the virtqueues and the port's queues.
- * The device's interrupt (OpenBIOS routes it; QEMU showed IRQ 30 beside the sungem's 29) is not
- * used yet, and the rings ask the device for none.
+ * Interrupt-driven (0.2.0 on): the device's interrupt -- OpenBIOS routes it; QEMU showed IRQ 30
+ * beside the sungem's 29 -- moves bytes between the virtqueues and the port's queues, through a
+ * filter that reads the ISR and an action on the work loop. A watchdog every second finds what no
+ * interrupt announced and, twice in a row, turns polling on. Polled -- a timer on the work loop
+ * every 10 ms, the rings asking the device for no interrupt -- where the interrupt cannot be had,
+ * or with Polled true in the personality.
  */
 
 #ifndef _GR_STEI_VIRTIOCONSOLE_H
@@ -32,6 +35,7 @@
 #include <IOKit/IOWorkLoop.h>
 #include <IOKit/IOCommandGate.h>
 #include <IOKit/IOTimerEventSource.h>
+#include <IOKit/IOFilterInterruptEventSource.h>
 #include <IOKit/pci/IOPCIDevice.h>
 #include <IOKit/serial/IOSerialDriverSync.h>
 #include <IOKit/serial/IORS232SerialStreamSync.h>
@@ -143,13 +147,22 @@ private:
     static IOReturn dequeueDataAction(OSObject *owner, void *arg0, void *arg1, void *arg2, void *arg3);
     static IOReturn dequeueEventAction(OSObject *owner, void *arg0, void *arg1, void *arg2, void *);
     static void     pollAction(OSObject *owner, IOTimerEventSource *sender);
+    static bool     interruptFilter(OSObject *owner, IOFilterInterruptEventSource *src);
+    static void     interruptAction(OSObject *owner, IOInterruptEventSource *src, int count);
+    void            timeoutOccurred();
+    void            rearm();
 
     IOPCIDevice             *fPCI;
     IOMemoryMap             *fIO;
     IOWorkLoop              *fWorkLoop;
     IOCommandGate           *fGate;
     IOTimerEventSource      *fTimer;
+    IOFilterInterruptEventSource *fInterrupt;   /* 0 when polled from the start */
     IORS232SerialStreamSync *fNub;
+    bool       fPolled;        /* the timer moves the bytes, not the interrupt */
+    volatile UInt32 fInterrupts;    /* interrupts taken, */
+    UInt32     fInterruptsSeen;     /* as of the last watchdog tick */
+    UInt32     fQuietTicks;    /* ticks that found work no interrupt had announced */
 
     Virtq      fRx;            /* queue 0, the port's receiveq */
     Virtq      fTx;            /* queue 1, its transmitq */

@@ -13,7 +13,7 @@
 # compatible with its superclass, IOSerialDriverSync superclass changed?" (live, 10.2, 2026-09-29;
 # read off the December 2002 tools).
 
-VERSION ?= 0.1.0
+VERSION ?= 0.2.0
 ABI     ?= gcc2
 
 # A GCC 2.95 build for 10.0 must see 10.0's headers and libraries, not 10.1's: built against
