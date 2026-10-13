@@ -291,18 +291,28 @@ bool io_virtio_VirtioVsock::mapBar(UInt8 bar)
 {
     if (bar > 5)
         return false;
-    /* A 64-bit BAR above 4 GB cannot be mapped by a 32-bit kernel, which keeps only its low half:
-     * live on 10.4.11 (2026-10-12) the firmware put the device's BAR 4 above 4 GB, the platform
-     * expert recorded 0x4000 for it ("assigned-addresses"), the mapping read zeros there, and the
-     * driver found no VIRTIO_F_VERSION_1. Such a BAR is left unmapped, and its registers are reached through the
-     * PCI_CFG capability's window instead. A 64-bit kernel maps it whole. */
-    if (sizeof(IOPhysicalAddress) < 8 && bar < 5) {
-        UInt32 lo = fPCI->configRead32(0x10 + 4 * bar);
+    /* The address IOPCIFamily recorded for the BAR is mapped, and it must be the one the device
+     * decodes: where they differ, the mapping reads and writes somewhere else. Live on 2026-10-12,
+     * twice: 10.4.11's 32-bit kernel recorded 0x4000 for a BAR 4 the firmware had put at
+     * 0x800004000 -- RAM, which 0.2.0 wrote the device status into -- and 10.8.5's configurator
+     * recorded 0x81004000 for the same BAR, which the device did not move to; both read zeros where
+     * VIRTIO_F_VERSION_1 should have been. Such a BAR is left unmapped and its registers are reached
+     * through the PCI_CFG capability's window instead. Compared in 32-bit halves, for GCC 2.95. */
+    {
+        UInt32 lo = fPCI->configRead32(0x10 + 4 * bar), hi = 0;
+        IODeviceMemory *mem = fPCI->getDeviceMemoryWithRegister(0x10 + 4 * bar);
 
-        if ((lo & 0x7) == 0x4 && fPCI->configRead32(0x10 + 4 * bar + 4) != 0) {
-            IOLog("VirtioVsock: BAR %d is at %08x%08x, above what this kernel can map\n", bar,
-                  (unsigned int) fPCI->configRead32(0x10 + 4 * bar + 4), (unsigned int) (lo & ~0xFU));
-            return false;
+        if ((lo & 0x7) == 0x4 && bar < 5)
+            hi = fPCI->configRead32(0x10 + 4 * bar + 4);
+        if (mem) {
+            IOPhysicalAddress rec = mem->getPhysicalAddress();
+
+            if ((UInt32) rec != (lo & ~0xFU) || physHi(rec) != hi) {
+                IOLog("VirtioVsock: BAR %d decodes at %08x%08x and was recorded at %08x%08x; not mapping it\n",
+                      bar, (unsigned int) hi, (unsigned int) (lo & ~0xFU),
+                      (unsigned int) physHi(rec), (unsigned int) rec);
+                return false;
+            }
         }
     }
     if (!fMaps[bar])
