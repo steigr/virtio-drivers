@@ -180,6 +180,12 @@ kernel can map"): the echo (4 MB in 1.6 s), the guest-to-host sha1 and the refus
 through `macos exec` in 1.1 s. A 32-bit process on Tiger, since Tiger runs a universal binary's
 x86_64 slice and has no 64-bit IOKit: `vsockcat` thinned to i386, as the installer thins the agent.
 
+The same on 10.8.5 (`mountainlion-guest`, 64-bit kernel), for another reason: its IOPCIConfigurator moved
+BAR 4's record below 4 GB (0x81004000) and the device kept decoding at 0x881004000. 0.2.2 compares
+the recorded address with the BAR register and maps only where they agree; elsewhere the window,
+polled. Loaded from the ESP: the agent on vsock from the host's first connection, 1 MB through
+`macos exec` in 1.06 s. 10.6.8 and 10.7.5, whose BAR is not moved, map it and run interrupt-driven.
+
 ## Not yet
 
 - The PCI configuration window fallback (the BARs were always mappable), and the watchdog's switch
