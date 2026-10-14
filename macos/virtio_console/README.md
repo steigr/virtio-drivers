@@ -10,6 +10,20 @@ The host side is `machine.AgentVirtioConsole`: `-device virtio-serial-pci,disabl
 deployment supplies it (`macos run --virtio-console`, chart value `virtioConsole.image`), and the
 agent's startup item serves it with `--tty auto`.
 
+## Interrupt-driven (0.2.0)
+
+The device's interrupt, which OpenBIOS routes, moves the bytes: a filter reads the ISR at primary
+interrupt time, an action on the work loop moves what is there, and a receive buffer left with the
+device for want of room is taken when the reader drains the port. A watchdog every second finds work
+no interrupt announced and, twice in a row, turns polling on; `Polled` true in the personality
+polls from the start (every 10 ms, the old way).
+
+On 10.0.4 (`cheetah-guest`, the `gcc2` build) and 10.2.8 (`jaguar-guest`, `gcc3`), installed from nothing on
+`the guest image` (2026-10-14): both consoles "interrupt-driven", the gauntlet's checks 13 and 12 pass
+and none fail. QEMU's CPU on the idle 10.0.4, three 60-second samples six minutes after boot: 5.7 to
+5.8 s with VirtioConsole, Virtio9P and VirtioVsock interrupt-driven, 6.0 to 6.2 s with all three
+`Polled` true. `ladder/ladder.sh`'s `virtio-test` passed on 10.0 to 10.3 with it.
+
 ## Why it is built in the guests
 
 A kext links against the kernel's C++ classes, and the compiler that built the kernel decides how
