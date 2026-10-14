@@ -43,6 +43,12 @@ Utility initialises it.
   watchdog (every 50 ms while requests are out) finds completions no interrupt announced, polled
   every 2 ms while busy, and every 100 ms while idle to read the ISR (which lowers a stray INTx).
   `Polled` set to `true` in the personality forces polling.
+- `doSyncReadWrite` and `doSynchronizeCache` wait for their completion a millisecond at a time;
+  called on the driver's own work loop, which alone delivers completions, they drive the device
+  themselves instead (0.2.3). Requests out five seconds with no completion are logged once, with
+  the ring indices and the ISR: lion-guest (10.7.5 on iMac19,1, polled because its ACPI could not
+  enable the PCI links) froze after a security update with every disk request stalled and nothing
+  in its log to say where (2026-10-14). Whether that was the wait on the work loop is not known.
 - Block numbers are 32 bits in `doAsyncReadWrite`: 2 TB is the most that is reachable.
 - Fixed media: not removable, not ejectable, not lockable; no media polling.
 - Not tested for unloading with a volume mounted; the storage stack refuses that anyway.
