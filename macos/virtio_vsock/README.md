@@ -41,8 +41,8 @@ makes it modern-only whatever `disable-modern` says (`info pci` in QEMU 10.2: `1
 
 - Capabilities (id 9) in configuration space name the common, notify, ISR and device structures
   inside the BAR; the driver maps the BAR with `mapDeviceMemoryWithRegister` and, if a BAR cannot
-  be mapped, falls back to the `PCI_CFG` capability's window (not exercised: the mapping worked
-  on 10.1 and 10.2).
+  be mapped, falls back to the `PCI_CFG` capability's window (on PowerPC not exercised: the mapping
+  worked on 10.1 and 10.2; on Intel 10.4, 10.5 and 10.8 to 10.11 it is the way in, see "Intel").
 - `VIRTIO_F_VERSION_1` is required; the status goes ACK, DRIVER, FEATURES_OK (read back), then
   DRIVER_OK after the queues are set up.
 - Queues are enabled with the three parts of the ring (descriptors, available, used) at separate
@@ -186,10 +186,27 @@ the recorded address with the BAR register and maps only where they agree; elsew
 polled. Loaded from the ESP: the agent on vsock from the host's first connection, 1 MB through
 `macos exec` in 1.06 s. 10.6.8 and 10.7.5, whose BAR is not moved, map it and run interrupt-driven.
 
+Interrupt-driven through the window, 0.2.3: each window access -- the BAR, the offset and the
+length written, then the data -- is made whole under a spin lock with interrupts off (`pushf`/`cli`
+spelled out, since `ml_set_interrupts_enabled`, which `IOSimpleLockLockDisableInterrupt` is inline
+over, is not in the KPI 10.4 links against), so the interrupt filter reads the ISR through the
+window like any other register and nothing interleaves. Where the BAR is windowed that is 10.4,
+10.5 and 10.8 to 10.11 (the gauntlet on `69b7e43`, 2026-10-13: every one of them polled). The same
+0.2.3 kext with `Polled` true and false, 2026-10-14:
+
+| | 8 MB echo, polled | interrupt-driven | guest to host, 8 MB | QEMU idle |
+| --- | --- | --- | --- | --- |
+| 10.4.11 (`tiger-guest`, 32-bit) | 2.94 s | 1.13 s | 0.53 s / 0.62 s | 7% of a core either way |
+| 10.8.5 (`mountainlion-guest`, 64-bit) | 3.14 s | 1.36 s | 0.50 s / 0.50 s | |
+
+The polled timer was not what the idle guest cost: three 60-second samples each way were 4.7 and
+4.8 s of QEMU's CPU. A mapped BAR is still quicker guest to host -- 0.18 s on Tiger with OVMF's 64-bit
+aperture off (`-fw_cfg name=opt/ovmf/X-PciMmio64Mb,string=0`), which puts the BAR below 4 GB --
+since every notify through the window is four configuration cycles.
+
 ## Not yet
 
-- The PCI configuration window fallback (the BARs were always mappable), and the watchdog's switch
-  to polling when an interrupt never comes.
+- The watchdog's switch to polling when an interrupt never comes.
 - Loading at boot on 10.0, 10.1 and 10.3.
 - A BSD socket family on Intel (10.4 has the KPI for one): `libvsock` serves the agent as it is.
 
