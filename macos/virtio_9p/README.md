@@ -200,7 +200,6 @@ modes and times, makes and lists 300 files, runs `/bin/echo` and `/bin/ls` copie
 
 - `test.sh` on the Intel releases (they were checked by hand and by the gauntlet: below).
 - More than one message with the device at a time.
-- PowerPC with the interrupt (`ladder/ladder.sh build`, not yet run on 0.2.0).
 
 ## Evidence
 
@@ -215,6 +214,10 @@ modes and times, makes and lists 300 files, runs `/bin/echo` and `/bin/ls` copie
 | 10.4.11, 0.2.0 (0.5 ms spin, then the interrupt) | 0.17 s | 0.13 s | 0.39 s | 0.10 s |
 | 10.8.5, 0.1.0 | 0.15 s | 0.11 s | 0.68 s | 0.10 s |
 | 10.8.5, 0.2.0 | 0.15 s | 0.11 s | 0.66 s | 0.10 s |
+
+PowerPC, 0.2.0 from nothing on `the guest image` (10.0.4 `cheetah-guest`, 10.2.8 `jaguar-guest`): "interrupt-driven",
+the gauntlet's 9pfs check passes on both; on 10.0.4 under TCG 16 MB read in under a second either
+way, 100 `ls` of the share's directory 11 s interrupt-driven and 9 s with `Polled` true.
 
 QEMU's server answers most messages in microseconds, which the spin catches; sleeping for every one
 cost a wakeup each, hence the spin first. What the interrupt buys is a reply slower than the spin:
