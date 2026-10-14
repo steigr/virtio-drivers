@@ -199,6 +199,10 @@ window like any other register and nothing interleaves. Where the BAR is windowe
 | 10.4.11 (`tiger-guest`, 32-bit) | 2.94 s | 1.13 s | 0.53 s / 0.62 s | 7% of a core either way |
 | 10.8.5 (`mountainlion-guest`, 64-bit) | 3.14 s | 1.36 s | 0.50 s / 0.50 s | |
 
+PowerPC (10.0.4 `cheetah-guest`, 10.2.8 `jaguar-guest`, from nothing on `the guest image`), where the BAR is
+always mapped: interrupt-driven as before, the agent on vsock; on 10.0.4 a 4 MB echo in 1.27 s and
+4 MB guest to host in about a second, interrupt-driven and polled alike under TCG.
+
 The polled timer was not what the idle guest cost: three 60-second samples each way were 4.7 and
 4.8 s of QEMU's CPU. A mapped BAR is still quicker guest to host -- 0.18 s on Tiger with OVMF's 64-bit
 aperture off (`-fw_cfg name=opt/ovmf/X-PciMmio64Mb,string=0`), which puts the BAR below 4 GB --
