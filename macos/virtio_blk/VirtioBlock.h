@@ -154,6 +154,10 @@ public:
     virtual IOReturn   reportRemovability(bool *isRemovable);
     virtual IOReturn   reportWriteProtection(bool *isWriteProtected);
 
+    /* For a synchronous request's wait (syncWait): true, having moved the device on by itself,
+     * when the caller is this driver's own work loop, which then cannot deliver the completion. */
+    bool               driveOnWorkLoop();
+
 private:
     /* the device */
     bool     deviceStart();
@@ -172,6 +176,7 @@ private:
     void     ackInterrupt();
     void     interruptOccurred(int count);
     void     timeoutOccurred();
+    void     noteStall();
 
     static IOReturn submitAction(OSObject *owner, void *req, void *, void *, void *);
     static IOReturn armAction(OSObject *owner, void *, void *, void *, void *);
@@ -230,6 +235,9 @@ private:
     volatile UInt32               fInterrupts;  /* interrupts taken, */
     UInt32                        fInterruptsSeen;  /* as of the last watchdog tick */
     UInt32                        fQuietTicks;  /* ticks that found work no interrupt had announced */
+    UInt32                        fStallMS;     /* how long requests have been out with no completion */
+    UInt16                        fStallUsed;   /* the used index that long ago */
+    bool                          fStallSaid;   /* and that it was logged, once per stall */
 };
 
 #endif /* !_GR_STEI_VIRTIOBLOCK_H */
