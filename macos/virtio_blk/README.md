@@ -131,7 +131,8 @@ release installed from nothing, then booted with a second virtio disk (`-blockde
 `virtio-blk-pci,disable-modern=on`) and a second virtio NIC in their default slots: VirtioBlock
 drives the second disk on 10.4 to 10.13, interrupt-driven. The installer's staging lines: "kext=
 VirtioBlock.kext into=/Volumes/Macintosh HD/System/Library/Extensions" on 10.4 and 10.5 (thinned to
-i386), "into=ESP inject=10.0.0..17.99.99" on 10.6 to 10.13; on 10.14 and 10.15 Apple's
+i386), "into=ESP inject=10.0.0..17.99.99" on 10.6 to 10.13 (up to 19.99.99 since 2026-10-14, for the
+boot after Mojave's Security Update 2021-005, whose boot set had no AppleVirtIO); on 10.14 and 10.15 Apple's
 AppleVirtIOBlockStorageDevice drives it. Evidence: the gauntlet's out/gauntlet/2026-10-11-493d061
 and 2026-10-12-493d061, and its grid, docs/gauntlet/2026-10-12-extended.
 
