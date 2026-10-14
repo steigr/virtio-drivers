@@ -86,7 +86,8 @@ enum {
     kIdleAckMS         = 100,           /* and while none are, to acknowledge a stray interrupt */
     kStrayLogMax       = 5,             /* stray interrupts logged, then counted only */
     kWatchdogMS        = 50,            /* and when interrupts carry the work */
-    kQuietTicksMax     = 2              /* watchdog ticks with unannounced work before polling */
+    kQuietTicksMax     = 2,             /* watchdog ticks with unannounced work before polling */
+    kStallMS           = 5000           /* requests out this long with no completion are logged */
 };
 
 /* PCI configuration space, spelled out because 10.0's headers name only some of it. */
@@ -528,8 +529,29 @@ void io_virtio_VirtioBlock::timeoutOccurred()
         fInterruptsSeen = fInterrupts;
     }
     service();
+    noteStall();
     if (BUSY() || fPolled)
         armTimer();
+}
+
+/* Requests out with no completion for five seconds are logged once, with what the rings and the
+ * ISR say: lion-guest on 0976e8e froze with every disk request stalled and nothing in its log to say
+ * where (2026-10-14). */
+void io_virtio_VirtioBlock::noteStall()
+{
+    if (!BUSY() || fLastUsed != fStallUsed) {
+        fStallUsed = fLastUsed;
+        fStallMS = 0;
+        fStallSaid = false;
+        return;
+    }
+    fStallMS += fTimerMS;
+    if (fStallMS >= kStallMS && !fStallSaid) {
+        fStallSaid = true;
+        IOLog("VirtioBlock: %d requests out, %d waiting, no completion for %d ms (avail %d, used %d, device used %d, ISR 0x%x, %s)\n",
+              fSlots - fFreeCount, fWaitHead ? 1 : 0, (int) fStallMS, fNextAvail, fLastUsed, *fUsedIdx,
+              rd8(kVirtioISR), fPolled ? "polled" : "interrupt-driven");
+    }
 }
 
 /* ------------------------------------------------------------------------------------------ */
@@ -733,14 +755,33 @@ static void syncDone(void *, void *parameter, IOReturn status, UInt64)
     w->done = true;
 }
 
-/* Through the asynchronous path, waiting a millisecond at a time for its completion. */
-static IOReturn syncWait(io_virtio_VirtioBlock *, VirtioBlockSyncWait *w, IOReturn r)
+/* Through the asynchronous path, waiting a millisecond at a time for its completion -- which only
+ * the work loop delivers, from its interrupt action or its timer. A caller that is the work loop
+ * itself (a completion this driver called that asked, in turn, for a flush or a synchronous read)
+ * would wait for ever for itself, so there the device is driven from here. The suspected shape of
+ * lion-guest's freeze on 0976e8e (2026-10-14): iMac19,1's ACPI could not enable the PCI links
+ * ("LINK: [GSIB] no interrupt / enable failed"), VirtioBlock polled, and after Security Update
+ * 2014-004 every disk request stalled with no panic. Not shown: there is no log of where it
+ * stopped. */
+static IOReturn syncWait(io_virtio_VirtioBlock *me, VirtioBlockSyncWait *w, IOReturn r)
 {
     if (r != kIOReturnSuccess)
         return r;
     while (!w->done)
-        IOSleep(1);
+        if (!me->driveOnWorkLoop())
+            IOSleep(1);
     return w->status;
+}
+
+bool io_virtio_VirtioBlock::driveOnWorkLoop()
+{
+    if (!fWorkLoop || !fWorkLoop->onThread())
+        return false;
+    if (fPolled)
+        ackInterrupt();
+    service();
+    IODelay(50);
+    return true;
 }
 
 #ifdef __LP64__
