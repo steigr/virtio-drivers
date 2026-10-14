@@ -49,7 +49,11 @@ once at a time.
 - Not supported: device nodes, FIFOs and sockets on the share (they are listed but cannot be
   opened, nor made), file flags (`chflags`), `getattrlist` (Carbon falls back), NFS export.
 - Directory offsets are entry indices, not QEMU's 64-bit cookies, so `telldir`/`seekdir` work.
-- Polled: a request is waited for with a short spin, then in 1 ms sleeps; no interrupt is used.
+- Interrupt-driven (0.2.0): a request is spun for 0.5 ms with the device asked for no interrupt,
+  then its caller sleeps on the driver's command gate until the interrupt -- or a watchdog every
+  50 ms that finds a reply no interrupt announced -- wakes it; two such ticks in a row turn polling
+  on. Polled where the interrupt cannot be had, or with `Polled` true in the personality: a 2 ms
+  spin, then 1 ms sleeps, which are a scheduler tick (10 ms) on the older kernels.
 
 ## Why it is built twice, and in the guests
 
@@ -195,9 +199,26 @@ modes and times, makes and lists 300 files, runs `/bin/echo` and `/bin/ls` copie
 ## Not yet
 
 - `test.sh` on the Intel releases (they were checked by hand and by the gauntlet: below).
-- Interrupts instead of polling; more than one message with the device at a time.
+- More than one message with the device at a time.
+- PowerPC with the interrupt (`ladder/ladder.sh build`, not yet run on 0.2.0).
 
 ## Evidence
+
+**Interrupts, 0.2.0 (2026-10-14).** The share of `tiger-guest` (10.4.11) and `mountainlion-guest` (10.8.5),
+0.1.0 swapped for 0.2.0 by hand (`umount`, `kextunload`, `kextload`, `mount_9p`), the same fresh
+64 MB files from the pod:
+
+| | read 64 MB | write 32 MB | `ls -l` of 300 files, x3 | test -f of 300 |
+| --- | --- | --- | --- | --- |
+| 10.4.11, 0.1.0 (spin, then sleeps) | 0.19 s | 0.13 s | 0.41 s | 0.10 s |
+| 10.4.11, 0.2.0 slept for at once | 0.26 s | 0.20 s | 0.54 s | 0.13 s |
+| 10.4.11, 0.2.0 (0.5 ms spin, then the interrupt) | 0.17 s | 0.13 s | 0.39 s | 0.10 s |
+| 10.8.5, 0.1.0 | 0.15 s | 0.11 s | 0.68 s | 0.10 s |
+| 10.8.5, 0.2.0 | 0.15 s | 0.11 s | 0.66 s | 0.10 s |
+
+QEMU's server answers most messages in microseconds, which the spin catches; sleeping for every one
+cost a wakeup each, hence the spin first. What the interrupt buys is a reply slower than the spin:
+it no longer waits out scheduler ticks, and no CPU spins for it.
 
 - Built without warnings with both toolchains (10.1.5, GCC 2.95.2; 10.2.8, GCC 3.1), 2026-10-01.
 - Loaded, registered `9p`, answered a mount with "no device" and unloaded on 10.1.5 and 10.2.8
