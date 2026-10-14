@@ -173,10 +173,10 @@ registered, matched, active; kextstat: 0.2.2), and the agent on the 16550 answer
   boot support to rely on), a read-only image, the polled mode, and a disk installed in
   `/System/Library/Extensions` loading at boot.
 - Multiqueue, indirect descriptors, discard and write-zeroes, larger transfers, TRIM.
-- On Intel: a system disk on virtio-blk (OpenCore would have to inject the kext, or the installer
-  stage it before the first boot from that disk), and the orchestrator's presets, which still
-  forbid virtio-blk before Big Sur; the kext installed in `/System/Library/Extensions` and loading
-  at boot; 10.14 and 10.15 beside Apple's own AppleVirtIO.
+- On Intel, done since 2026-10-14: every release before Big Sur boots from a virtio-blk system disk,
+  10.6 to 10.15 installing onto it with this kext injected into their installers, Tiger and Leopard
+  loading it from `/System/Library/Extensions` once installed (CHANGELOG.md's "2026-10-14: Intel 10.4 to 10.15 boot from virtio-blk with a virtio-net NIC alone, and PowerPC's checks get a second disk and NIC"). Open: Lion's
+  freeze with the kext polled (TODO.md's "Lion freezes during its updates with VirtioBlock polled").
 
 ## References
 
