@@ -214,9 +214,8 @@ Version 0.2.0, the one source for both platforms, 2026-10-09/10 in the cluster:
   device -- on 10.15.8, 2026-10-10, it took 10.0.2.15 by DHCP and answered pings at 0.3 ms -- so
   VirtioNet is not for 10.15, and is not to be put where it would compete with that driver.
 - 10.4 traffic, past Tiger's pmap panics.
-- The orchestrator still gives 10.4 to 10.15 an e1000 (`internal/machine/presets.go`); making
-  virtio-net their NIC needs the kext there before the installed system's first boot (OpenCore's
-  `Kernel/Add` from 10.6 on, `/System/Library/Extensions` on 10.4 and 10.5).
+- Done since 2026-10-14: virtio-net is the only NIC of 10.4 to 10.15, this kext driving it to 10.14
+  (CHANGELOG.md's "2026-10-14: Intel 10.4 to 10.15 boot from virtio-blk with a virtio-net NIC alone, and PowerPC's checks get a second disk and NIC").
 - QEMU's `set_link` (the STATUS feature and its configuration interrupt): the test pods' QMP socket
   has one client, the orchestrator.
 - Checksum offload, mergeable buffers, the control queue (receive filtering, MAC changes),
