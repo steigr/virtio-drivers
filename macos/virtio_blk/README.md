@@ -39,10 +39,22 @@ Utility initialises it.
 - At most 30 pages per request (`reportMaxRead/WriteTransfer`, 120 KiB), so a request never needs
   more than the 32 data descriptors of its slot. Up to 16 requests are in flight (the queue's size
   divided by 34 descriptors a slot: 7 with QEMU's 256 entries); more wait in a list.
-- Interrupt-driven where the platform routes the device's PCI interrupt; otherwise, or when the
-  watchdog (every 50 ms while requests are out) finds completions no interrupt announced, polled
-  every 2 ms while busy, and every 100 ms while idle to read the ISR (which lowers a stray INTx).
-  `Polled` set to `true` in the personality forces polling.
+- Interrupt-driven where the platform routes the device's PCI interrupt. The interrupt is
+  registered only once the device is reset, and enabled at once (0.2.4). A filter source
+  registered and left disabled gets its vector masked by the next interrupt on it, and on q35 the
+  system disk shares its line with Virtio9P and the gauntlet's second disk.
+- A lost interrupt is recovered from (0.2.5). When the watchdog (every 50 ms while requests are
+  out) finds completions that no interrupt announced, it reads the ISR, which lowers the device's
+  line so that its next completion raises it afresh, and serves them. Only five recoveries in a row
+  with no interrupt between them -- a line that is not routed at all -- turn polling on: every 2 ms
+  while busy and every 100 ms while idle, to read the ISR (which lowers a stray INTx). The source is
+  then given back, not left disabled. `Polled` set to `true` in the personality forces polling.
+- Up to 0.2.4 the first lost interrupt turned polling on for good. On the whole gauntlet of
+  2026-10-14 Leopard and Mountain Lion to High Sierra polled. 0.2.4's line said why: their system
+  disks had taken 4126 to 11543 interrupts, and then one did not come, the ISR still 0x1. With
+  0.2.5 (2026-10-15) Mountain Lion and High Sierra lost one five times and more and recovered every
+  time; High Sierra's system disk was past 25000 interrupts at its fifth. Tiger, which lost none,
+  was unchanged. Leopard is still to be seen: its installer failed in both attempts that day.
 - `doSyncReadWrite` and `doSynchronizeCache` wait for their completion a millisecond at a time;
   called on the driver's own work loop, which alone delivers completions, they drive the device
   themselves instead (0.2.3). Requests out five seconds with no completion are logged once, with
