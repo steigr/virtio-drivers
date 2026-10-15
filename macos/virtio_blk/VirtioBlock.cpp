@@ -86,7 +86,9 @@ enum {
     kIdleAckMS         = 100,           /* and while none are, to acknowledge a stray interrupt */
     kStrayLogMax       = 5,             /* stray interrupts logged, then counted only */
     kWatchdogMS        = 50,            /* and when interrupts carry the work */
-    kQuietTicksMax     = 2,             /* watchdog ticks with unannounced work before polling */
+    kQuietTicksMax     = 2,             /* watchdog ticks with unannounced work before a recovery */
+    kRecoveriesMax     = 5,             /* recoveries in a row with no interrupt between, before polling */
+    kRecoveryLogMax    = 5,             /* recoveries logged, then counted only */
     kStallMS           = 5000           /* requests out this long with no completion are logged */
 };
 
@@ -540,9 +542,17 @@ void io_virtio_VirtioBlock::interruptDetach()
     fInterrupt = 0;
 }
 
-/* Polled, the timer does all the work. Otherwise it is a watchdog: if completions keep turning up
- * that no interrupt announced -- the platform did not route the line -- the driver polls from then
- * on. */
+/* Polled, the timer does all the work. Otherwise it is a watchdog: completions that no interrupt
+ * announced are a lost interrupt, and are recovered from -- the ISR read, which lowers the device's
+ * line so that its next completion raises it afresh, and the completions served. Only when
+ * recoveries keep coming with no interrupt between them -- the platform does not route the line
+ * at all -- does the driver poll from then on.
+ *
+ * Up to 0.2.4 the first lost interrupt turned polling on for good. On the whole gauntlet of
+ * 2026-10-14 and again with 0.2.4 the next day, Leopard's and Mountain Lion's to High Sierra's
+ * system disks took thousands of interrupts (4126, 8660, 11543) and then one did not come, the
+ * device's ISR still 0x1: a lost one, on a line q35 shares among the system disk, Virtio9P and the
+ * gauntlet's second disk, not a line that was never routed. */
 void io_virtio_VirtioBlock::timeoutOccurred()
 {
     fTimerArmed = false;
@@ -551,13 +561,23 @@ void io_virtio_VirtioBlock::timeoutOccurred()
     if (fPolled)
         ackInterrupt();
     if (!fPolled) {
+        if (fInterrupts != fInterruptsSeen)
+            fRecoveries = 0;    /* interrupts came since the last recovery */
         if (fLastUsed != *fUsedIdx && fInterrupts == fInterruptsSeen) {
             if (++fQuietTicks >= kQuietTicksMax) {
-                IOLog("VirtioBlock: completions raise no interrupt (%u taken before, ISR 0x%x); polling every %d ms instead\n",
-                      (unsigned) fInterrupts, rd8(kVirtioISR), kPollMS);
-                interruptDetach();
-                fPolled = true;
-                *fAvailFlags = kAvailNoInterrupt;
+                UInt8 isr = rd8(kVirtioISR);    /* lowers the line */
+
+                fQuietTicks = 0;
+                fRecovered++;
+                if (++fRecoveries >= kRecoveriesMax) {
+                    IOLog("VirtioBlock: completions raise no interrupt (%u taken, %u recovered from); polling every %d ms instead\n",
+                          (unsigned) fInterrupts, (unsigned) fRecovered, kPollMS);
+                    interruptDetach();
+                    fPolled = true;
+                    *fAvailFlags = kAvailNoInterrupt;
+                } else if (fRecovered <= kRecoveryLogMax)
+                    IOLog("VirtioBlock: an interrupt was lost (ISR 0x%x, %u taken); recovered, still interrupt-driven\n",
+                          isr, (unsigned) fInterrupts);
             }
         } else
             fQuietTicks = 0;

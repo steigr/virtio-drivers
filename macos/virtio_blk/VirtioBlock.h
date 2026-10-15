@@ -237,6 +237,8 @@ private:
     volatile UInt32               fInterrupts;  /* interrupts taken, */
     UInt32                        fInterruptsSeen;  /* as of the last watchdog tick */
     UInt32                        fQuietTicks;  /* ticks that found work no interrupt had announced */
+    UInt32                        fRecoveries;  /* lost interrupts recovered from since the last one taken */
+    UInt32                        fRecovered;   /* and in all */
     UInt32                        fStallMS;     /* how long requests have been out with no completion */
     UInt16                        fStallUsed;   /* the used index that long ago */
     bool                          fStallSaid;   /* and that it was logged, once per stall */
