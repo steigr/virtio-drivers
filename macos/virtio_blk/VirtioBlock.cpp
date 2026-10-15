@@ -506,6 +506,40 @@ void io_virtio_VirtioBlock::timeoutAction(OSObject *owner, IOTimerEventSource *)
     ((io_virtio_VirtioBlock *) owner)->timeoutOccurred();
 }
 
+/* Registers the device's interrupt and enables it at once: a filter source registered and left
+ * disabled is what a shared INTx cannot afford (see interruptDetach). */
+bool io_virtio_VirtioBlock::interruptAttach()
+{
+    if (fInterrupt)
+        return true;
+    fInterrupt = IOFilterInterruptEventSource::filterInterruptEventSource(this, interruptAction,
+                                                                          interruptFilter, fPCI, 0);
+    if (!fInterrupt)
+        return false;
+    if (fWorkLoop->addEventSource(fInterrupt) != kIOReturnSuccess) {
+        fInterrupt->release();
+        fInterrupt = 0;
+        return false;
+    }
+    fInterrupt->enable();
+    return true;
+}
+
+/* Gives the interrupt back. Disabled and left registered, as 0.2.3 left it on falling back to
+ * polling, the source would get the vector masked by the next interrupt on it -- and with it every
+ * other device on a shared line: on q35 the system disk shares its line with the 9p share and the
+ * gauntlet's second disk. */
+void io_virtio_VirtioBlock::interruptDetach()
+{
+    if (!fInterrupt)
+        return;
+    fInterrupt->disable();
+    if (fWorkLoop)
+        fWorkLoop->removeEventSource(fInterrupt);
+    fInterrupt->release();
+    fInterrupt = 0;
+}
+
 /* Polled, the timer does all the work. Otherwise it is a watchdog: if completions keep turning up
  * that no interrupt announced -- the platform did not route the line -- the driver polls from then
  * on. */
@@ -519,8 +553,9 @@ void io_virtio_VirtioBlock::timeoutOccurred()
     if (!fPolled) {
         if (fLastUsed != *fUsedIdx && fInterrupts == fInterruptsSeen) {
             if (++fQuietTicks >= kQuietTicksMax) {
-                IOLog("VirtioBlock: completions raise no interrupt; polling every %d ms instead\n", kPollMS);
-                fInterrupt->disable();
+                IOLog("VirtioBlock: completions raise no interrupt (%u taken before, ISR 0x%x); polling every %d ms instead\n",
+                      (unsigned) fInterrupts, rd8(kVirtioISR), kPollMS);
+                interruptDetach();
                 fPolled = true;
                 *fAvailFlags = kAvailNoInterrupt;
             }
@@ -584,23 +619,22 @@ bool io_virtio_VirtioBlock::start(IOService *provider)
     fTimer = IOTimerEventSource::timerEventSource(this, timeoutAction);
     if (!fTimer || fWorkLoop->addEventSource(fTimer) != kIOReturnSuccess)
         goto fail;
-    if (!fPolled) {
-        fInterrupt = IOFilterInterruptEventSource::filterInterruptEventSource(this, interruptAction,
-                                                                              interruptFilter, provider, 0);
-        if (!fInterrupt || fWorkLoop->addEventSource(fInterrupt) != kIOReturnSuccess) {
-            IOLog("VirtioBlock: the device's interrupt cannot be had; polling every %d ms instead\n", kPollMS);
-            if (fInterrupt)
-                fInterrupt->release();
-            fInterrupt = 0;
-            fPolled = true;
-        }
-    }
-
     if (!deviceStart())
         goto fail;
+    /* The interrupt only now: the device is reset and its ISR clear, so the line is low. Up to
+     * 0.2.3 it was registered before the reset and enabled after it, and the source sat registered
+     * and disabled while whatever the firmware left -- OVMF and OpenCore read the disk through the
+     * device too -- could hold the line up; an interrupt on a vector whose source is disabled gets
+     * the vector masked. On Leopard and Mountain Lion to High Sierra every VirtioBlock fell back to
+     * polling (the whole gauntlet of 2026-10-14, the system disk alone included, on a line shared
+     * with Virtio9P), which is what a masked vector looks like; VirtioNet 0.2.2 learned the same of
+     * a shared line. Suspected, not shown: the fallback's line now says what was seen. */
+    if (!fPolled && !interruptAttach()) {
+        IOLog("VirtioBlock: the device's interrupt cannot be had; polling every %d ms instead\n", kPollMS);
+        fPolled = true;
+        *fAvailFlags = kAvailNoInterrupt;
+    }
     fRunning = true;
-    if (fInterrupt && !fPolled)
-        fInterrupt->enable();
     if (fPolled) {
         ackInterrupt();         /* whatever the firmware or a reset left */
         fGate->runAction(armAction);
@@ -639,8 +673,7 @@ void io_virtio_VirtioBlock::stop(IOService *provider)
     fRunning = false;
     if (fTimer)
         fTimer->cancelTimeout();
-    if (fInterrupt)
-        fInterrupt->disable();
+    interruptDetach();
     if (fPCI && (fIO || fIOBase))
         deviceReset();
     for (slot = 0; fInFlight && slot < fSlots; slot++) {

@@ -177,6 +177,8 @@ private:
     void     interruptOccurred(int count);
     void     timeoutOccurred();
     void     noteStall();
+    bool     interruptAttach();
+    void     interruptDetach();
 
     static IOReturn submitAction(OSObject *owner, void *req, void *, void *, void *);
     static IOReturn armAction(OSObject *owner, void *, void *, void *, void *);
