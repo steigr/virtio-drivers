@@ -7,7 +7,7 @@
 # The PowerPC builds are ../ppc/virtioconsole's (see its Makefile for where every compiler flag
 # comes from and the failure behind each). Leaves build/<ABI>/VirtioBlock.kext.
 
-VERSION ?= 0.2.6
+VERSION ?= 0.2.7
 ABI     ?= gcc2
 
 # As for VirtioConsole, the GCC 2.95 build must see 10.0's Kernel.framework and kmod libraries,

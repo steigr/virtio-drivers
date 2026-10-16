@@ -197,11 +197,32 @@ bool io_virtio_VirtioBlock::queueAlloc()
     if (!fMeta || !fInFlight || !fFree)
         return false;
     bzero(fInFlight, fSlots * sizeof(VirtioBlockRequest *));
+#ifdef VIRTIOBLOCK_DMACOMMAND
+    fDMA = (IODMACommand **) IOMalloc(fSlots * sizeof(IODMACommand *));
+    if (!fDMA)
+        return false;
+    bzero(fDMA, fSlots * sizeof(IODMACommand *));
+    for (UInt16 i = 0; i < fSlots; i++) {
+        fDMA[i] = IODMACommand::withSpecification(kIODMACommandOutputHost64, 64, 0,
+                                                  IODMACommand::kMapped, kMaxTransfer, 1);
+        if (!fDMA[i])
+            return false;
+    }
+#endif
     return true;
 }
 
 void io_virtio_VirtioBlock::queueFree()
 {
+#ifdef VIRTIOBLOCK_DMACOMMAND
+    if (fDMA) {
+        for (UInt16 i = 0; i < fSlots; i++)
+            if (fDMA[i])
+                fDMA[i]->release();
+        IOFree(fDMA, fSlots * sizeof(IODMACommand *));
+        fDMA = 0;
+    }
+#endif
     if (fInFlight)
         IOFree(fInFlight, fSlots * sizeof(VirtioBlockRequest *));
     if (fFree)
@@ -294,6 +315,50 @@ bool io_virtio_VirtioBlock::issue(VirtioBlockRequest *req, UInt16 slot)
     offset = req->done * kSectorSize;
     length = offset + chunk * kSectorSize;
 
+#ifdef VIRTIOBLOCK_DMACOMMAND
+    /* The chunk's segments from the slot's IODMACommand, prepared for the chunk alone and completed
+     * when the device has finished it (chunkDone). Up to 0.2.6 they came from the buffer's own
+     * getPhysicalSegment64, and with two CPUs Tiger's memory was corrupted by this driver's I/O:
+     * 64 MiB written to a virtio-blk disk read back wrong at every block size -- whole pages that
+     * held another process's exec arguments ("PATH=...", "_=/usr/bin/head") where the disk's data
+     * belonged, the disk itself holding the right data -- a page of a file on the AHCI system disk
+     * overwritten the same way, and pmap_remove panics ("mapping not in pv_list", "null pv_list")
+     * within minutes, polled or interrupt-driven. The same test was clean with the disk on AHCI and
+     * with one CPU (tiger-guest, 10.4.11, 2026-10-16); Apple's drivers on these kernels take their
+     * buffers through an IODMACommand. Leopard's installed systems had the same signature: a kext
+     * holding strings from the account's new home directory, an HFS catalog node holding a Mach-O
+     * header. */
+    if (req->buffer) {
+        IODMACommand *dma = fDMA[slot];
+        IODMACommand::Segment64 segs[kSegsMax];
+        UInt32 num = kSegsMax, i;
+        UInt64 off = offset, total = 0;
+
+        if (req->dma != dma) {
+            if (dma->setMemoryDescriptor(req->buffer, false) != kIOReturnSuccess)
+                return false;
+            req->dma = dma;
+        }
+        if (dma->prepare(offset, length - offset, false, true) != kIOReturnSuccess)
+            return false;
+        if (dma->gen64IOVMSegments(&off, segs, &num) != kIOReturnSuccess) {
+            dma->complete(false, false);
+            return false;
+        }
+        for (i = 0; i < num; i++) {
+            d[1 + n].addr     = segs[i].fIOVMAddr;
+            d[1 + n].len      = (UInt32) segs[i].fLength;
+            d[1 + n].flags    = flags | kDescNext;
+            d[1 + n].next     = base + 2 + n;
+            total += segs[i].fLength;
+            n++;
+        }
+        if (!n || total != length - offset) {
+            dma->complete(false, false);
+            return false;
+        }
+    }
+#else
     if (req->buffer) {
         while (offset < length) {
             IOByteCount segLen;
@@ -311,6 +376,7 @@ bool io_virtio_VirtioBlock::issue(VirtioBlockRequest *req, UInt16 slot)
             n++;
         }
     }
+#endif
 
     meta->type       = req->type;
     meta->ioprio     = 0;
@@ -339,10 +405,27 @@ bool io_virtio_VirtioBlock::issue(VirtioBlockRequest *req, UInt16 slot)
     return true;
 }
 
-/* Calls the request's completion and lets go of its buffer. */
+/* The device has finished the request's chunk: its slot's DMA command lets go of it, synchronized. */
+void io_virtio_VirtioBlock::chunkDone(VirtioBlockRequest *req)
+{
+#ifdef VIRTIOBLOCK_DMACOMMAND
+    if (req->dma)
+        req->dma->complete(false, true);
+#endif
+}
+
+/* Calls the request's completion and lets go of its buffer -- the slot's DMA command first, so
+ * that a request the completion sends at once can have the slot. */
 void io_virtio_VirtioBlock::finish(VirtioBlockRequest *req, IOReturn status)
 {
     UInt64 bytes = (status == kIOReturnSuccess) ? (UInt64) req->blocks * kSectorSize : 0;
+
+#ifdef VIRTIOBLOCK_DMACOMMAND
+    if (req->dma) {
+        req->dma->clearMemoryDescriptor(false);
+        req->dma = 0;
+    }
+#endif
 
     if (req->buffer) {
         req->buffer->complete();
@@ -412,6 +495,7 @@ void io_virtio_VirtioBlock::service()
         req = fInFlight[slot];
         fInFlight[slot] = 0;
         status = fMeta[slot].status;
+        chunkDone(req);
         if (status == kBlkStatusOK && req->done + req->chunk < req->blocks) {
             req->done += req->chunk;
             if (issue(req, slot))
@@ -629,20 +713,6 @@ bool io_virtio_VirtioBlock::start(IOService *provider)
 
     polled = OSDynamicCast(OSBoolean, getProperty("Polled"));
     fPolled = polled && polled->isTrue();
-#if defined(__i386__)
-    /* Polled under the 32-bit Intel kernels, whatever the personality says: with its interrupt on
-     * and two CPUs, Tiger's memory was corrupted by I/O through this driver -- 64 MiB written to a
-     * virtio-blk disk read back wrong at every block size, a page of the source file on the AHCI
-     * system disk turned into another process's exec arguments ("PATH=...", "_=/usr/bin/head"),
-     * and the kernel panicked in pmap_remove ("mapping not in pv_list") within a minute. The same
-     * test was clean with the disk on AHCI, with one CPU, and with this driver polled on two
-     * (tiger-guest, 10.4.11, 2026-10-16). Leopard's installed systems had the same signature: a kext
-     * holding strings from the account's new home directory, an HFS catalog node holding a Mach-O
-     * header. The 64-bit kernels, from Snow Leopard, take this driver's interrupt on two CPUs and
-     * show none of it. What the interrupt sets off in the 32-bit kernels is not known; a stale
-     * mapping that a missed TLB shootdown left is what the corrupted page looks like. */
-    fPolled = true;
-#endif
 
     fWorkLoop = IOWorkLoop::workLoop();
     if (!fWorkLoop)
@@ -788,6 +858,9 @@ IOReturn io_virtio_VirtioBlock::queueRequest(IOMemoryDescriptor *buffer, UInt32 
     req->blocks = (type == kBlkFlush) ? 0 : (UInt32) nblks;
     req->done = 0;
     req->chunk = 0;
+#ifdef VIRTIOBLOCK_DMACOMMAND
+    req->dma = 0;
+#endif
     if (req->buffer) {
         r = req->buffer->prepare();
         if (r != kIOReturnSuccess) {

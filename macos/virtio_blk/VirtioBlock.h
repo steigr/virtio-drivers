@@ -69,6 +69,12 @@
 #include <IOKit/IOMemoryDescriptor.h>
 #include <IOKit/pci/IOPCIDevice.h>
 #include <IOKit/storage/IOBlockStorageDevice.h>
+#if defined(__i386__)
+#include <IOKit/IODMACommand.h>
+/* The 32-bit Intel kernels' buffers reach the device through an IODMACommand per slot, as Apple's
+ * own drivers there take theirs (VirtioBlock.cpp's issue says why). */
+#define VIRTIOBLOCK_DMACOMMAND 1
+#endif
 
 /* The split virtqueue, legacy layout; see ../ppc/virtioconsole/VirtioConsole.h. The address is one
  * 64-bit field, which is right in either byte order. */
@@ -111,6 +117,9 @@ struct VirtioBlockRequest {
     UInt32               blocks;
     UInt32               done;          /* blocks the device has finished */
     UInt32               chunk;         /* blocks of the chain in flight */
+#ifdef VIRTIOBLOCK_DMACOMMAND
+    IODMACommand        *dma;           /* its slot's, set on the buffer while it holds the slot */
+#endif
 };
 
 class io_virtio_VirtioBlock : public IOBlockStorageDevice
@@ -170,6 +179,7 @@ private:
                      IOStorageCompletion completion);
     void     submit(VirtioBlockRequest *req);
     bool     issue(VirtioBlockRequest *req, UInt16 slot);
+    void     chunkDone(VirtioBlockRequest *req);
     void     finish(VirtioBlockRequest *req, IOReturn status);
     void     service();
     void     armTimer();
@@ -221,6 +231,9 @@ private:
     VirtioBlockPhys               fMetaPhys;
     VirtioBlockRequest          **fInFlight;    /* by slot */
     UInt16                       *fFree;        /* the free slots, a stack */
+#ifdef VIRTIOBLOCK_DMACOMMAND
+    IODMACommand                **fDMA;         /* by slot */
+#endif
     UInt16                        fFreeCount;
     VirtioBlockRequest           *fWaitHead;    /* requests waiting for a slot, oldest first */
     VirtioBlockRequest           *fWaitTail;
