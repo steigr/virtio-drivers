@@ -15,6 +15,11 @@ injected by OpenCore from 10.6, in `/System/Library/Extensions` on 10.4 and 10.5
 carry it on 10.0 to 10.3. Until 2026-10-10 it lived in `drivers/ppc/virtioblock` and was PowerPC
 only.
 
+**0.2.7**: on the 32-bit Intel kernels (Tiger, Leopard) the buffers reach the device through an
+IODMACommand per request slot; up to 0.2.6 through `getPhysicalSegment64`, with which I/O on two
+CPUs corrupted the guest's memory (CHANGELOG.md's "2026-10-16: VirtioBlock 0.2.7 takes the 32-bit
+kernels' buffers through an IODMACommand").
+
 ## Host side
 
     -drive file=disk.img,if=none,id=vd0,format=raw -device virtio-blk-pci,disable-modern=on,drive=vd0
