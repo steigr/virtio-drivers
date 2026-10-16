@@ -629,6 +629,20 @@ bool io_virtio_VirtioBlock::start(IOService *provider)
 
     polled = OSDynamicCast(OSBoolean, getProperty("Polled"));
     fPolled = polled && polled->isTrue();
+#if defined(__i386__)
+    /* Polled under the 32-bit Intel kernels, whatever the personality says: with its interrupt on
+     * and two CPUs, Tiger's memory was corrupted by I/O through this driver -- 64 MiB written to a
+     * virtio-blk disk read back wrong at every block size, a page of the source file on the AHCI
+     * system disk turned into another process's exec arguments ("PATH=...", "_=/usr/bin/head"),
+     * and the kernel panicked in pmap_remove ("mapping not in pv_list") within a minute. The same
+     * test was clean with the disk on AHCI, with one CPU, and with this driver polled on two
+     * (tiger-guest, 10.4.11, 2026-10-16). Leopard's installed systems had the same signature: a kext
+     * holding strings from the account's new home directory, an HFS catalog node holding a Mach-O
+     * header. The 64-bit kernels, from Snow Leopard, take this driver's interrupt on two CPUs and
+     * show none of it. What the interrupt sets off in the 32-bit kernels is not known; a stale
+     * mapping that a missed TLB shootdown left is what the corrupted page looks like. */
+    fPolled = true;
+#endif
 
     fWorkLoop = IOWorkLoop::workLoop();
     if (!fWorkLoop)
