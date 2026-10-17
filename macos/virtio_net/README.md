@@ -182,7 +182,7 @@ Version 0.2.0, the one source for both platforms, 2026-10-09/10 in the cluster:
   10.7.5, 10.8.5, 10.9.5, 10.10.5, 10.11.6, 10.12.6 and 10.13.6 (the 10.6 bundle; 10.13's approval
   of third-party kexts did not stop it under OpenCore's `csr-active-config`). On 10.4.11 the kext
   loaded, attached and named the interface (`en1`, interrupt-driven), and Tiger then panicked in
-  its pmap, as it does without it (TODO.md's "Tiger panics in its pmap when it is given work"), so
+  its pmap, as it does without it (TODO.md's "Tiger and Leopard lose pages in their pmap"), so
   no traffic test there yet.
 - Once on 10.2.8, the first restart after swapping the kext in ended at the panic screen with no
   log to read (OpenBIOS keeps no panic NVRAM); the guest booted with the new kext on the next
