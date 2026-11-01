@@ -1,0 +1,18 @@
+#!/sbin/sh
+# Load the virtio-serial driver at boot and name its ports under /dev.
+case "$1" in
+start)
+	if /sbin/ml ld -c /usr/lib/vioser/vioser.o -p vioser_; then
+		[ -d /hw/virtio-ports ] && ln -sf /hw/virtio-ports /dev/virtio-ports
+	fi
+	;;
+stop)
+	id=`/sbin/ml list -l | awk '/vioser/ { print $2 }'`
+	[ -n "$id" ] && /sbin/ml unld $id
+	rm -f /dev/virtio-ports
+	;;
+*)
+	echo "usage: $0 {start|stop}"
+	;;
+esac
+exit 0

@@ -1,0 +1,16 @@
+#!/bin/sh
+# Run the MIPSpro compiler of the same name as this script (cc, CC, c89, ...)
+# and drop the "requires a license password" banner it prints on stderr.
+# Compiler output, ordering of stdout and the exit status are unchanged.
+# Same behaviour as github.com/LaurentChardon/mipspro, without needing bash.
+cmd=`basename $0`
+tmp=/tmp/mipspro-suppress.$$
+/usr/bin/$cmd "$@" 2> $tmp
+rc=$?
+awk '
+skip == 0 && ($0 == "No such feature exists (-5,116)" || index($0, "Cannot find SERVER hostname in network database (-14,7:2)") == 1) { skip = 1; next }
+skip == 1 { if (index($0, "support provider.") > 0) skip = 2; next }
+skip == 2 { skip = 3; if ($0 == "") next }
+{ print }' $tmp >&2
+rm -f $tmp
+exit $rc

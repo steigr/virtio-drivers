@@ -1,0 +1,17 @@
+#!/bin/sh
+# Inside IRIX: install tools/mipspro-suppress as cc, CC and friends, in a
+# directory to put on PATH ahead of /usr/bin.  Removes the MIPSpro compilers'
+# "requires a license password" banner and nothing else.
+#
+#   sh tools/install-wrapper [dir]    (default /usr/local/mipspro/bin)
+set -e
+dir=${1:-/usr/local/mipspro/bin}
+src=`dirname $0`/mipspro-suppress
+mkdir -p $dir
+cp $src $dir/mipspro-suppress
+chmod a+x $dir/mipspro-suppress
+for c in cc CC c89 c99 f77 f90 fort77; do
+	rm -f $dir/$c
+	ln -s mipspro-suppress $dir/$c
+done
+echo "PATH=$dir:\$PATH"
