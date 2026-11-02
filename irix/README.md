@@ -19,7 +19,20 @@ its `docs/virtio-serial.md` describes what the driver talks to.
 
 ## Using it
 
-Inside IRIX, with MIPSpro and the kernel headers installed:
+The easy way is the inst package, from the
+[`irix` organisation's packages](irix/-/packages/generic/vioser/latest):
+
+```sh
+inst -f vioser-latest.tardist     # installs the module for this board
+/etc/init.d/vioser start          # or reboot: it loads at every boot
+```
+
+The `dev` image, not selected by default, adds `sys/vioser.h`. Removing the
+package leaves a loaded module in the kernel until the next reboot. With no
+device present the module loads and stays idle.
+
+To build it yourself instead, inside IRIX, with MIPSpro and the kernel headers
+installed:
 
 ```sh
 cd driver
@@ -80,6 +93,18 @@ script needs `/usr/freeware/bin/bash`. A stock IRIX install has no bash.
 ## Tests
 
 See [CLAUDE.md](CLAUDE.md) for how to run them.
+
+## Package builds
+
+[.forgejo/workflows/package.yml](.forgejo/workflows/package.yml) runs on a push to
+`main` that touches the driver or the packaging, and on demand. On the `irix`
+runner, the IRIX guest compiles a module for each of IP22, IP28 and IP30 and runs
+`gendist`, then installs and removes the package with `inst`. The runner uploads
+it as the generic package `vioser`, under its version and `latest`, with the
+organisation secret `PACKAGES_TOKEN`.
+
+The version is an integer, as inst needs: the commit's UTC date and its number
+that day, such as `2026110202`.
 
 ## Limits
 

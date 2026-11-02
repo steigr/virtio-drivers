@@ -33,6 +33,13 @@ tests/iris/run_tests.py "$WORK" --bytes 16777216                            # bu
 python3 ../iris/tools/irix-sh.py --port 12323 run -k 'sync; shutdown -p -g0 -y'
 ```
 
+The inst package, inside IRIX (`.forgejo/workflows/package.yml` runs both, then uploads the result with `packaging/publish-package.sh`):
+
+```sh
+sh /share/packaging/build-package.sh 2026110201 /var/tmp/out   # vioser-2026110201.tardist; /tmp empties at boot
+sh /share/packaging/test-package.sh /var/tmp/out/vioser-2026110201.tardist   # inst install, check, remove; loads nothing
+```
+
 There is no way to run a single end-to-end test: call the functions in `run_tests.py`, or run `/tmp/vstest` by hand (`tests/guest/vstest.c` lists its modes). A change to the interrupt or polling path needs a run on both `VIRTIO_SLOT=exp0` and `exp1`, since they take different paths.
 
 Writes go to `irix65.raw.overlay` beside the instance's image, never to the image. Delete the overlay after a crash or kill: a killed guest leaves XFS dirty.
@@ -55,6 +62,8 @@ Port discovery polls the control queue during attach, before the interrupt is co
 - **Everything the device reads is little-endian**, on a big-endian CPU. `virtq.c` stores ring fields a byte at a time. virtio-mmio registers are the exception: they read as plain numbers with `lw`, and config space is read a byte at a time.
 - **The MIPSpro in the guest is C89**: declarations at the top of blocks, no `<stdint.h>`, `__uint16_t` undefined in the kernel. DDI signatures are IRIX's, not the SVR4 ones in old docs: `SV_WAIT_SIG(sv, lock, s)`, `SV_BROADCAST(sv)`, `MUTEX_ALLOC(type, flags, name)`. Check `/usr/include/sys` rather than trusting memory.
 - **`tools/irix-sh.py` hangs silently on a command line over 256 characters** (IRIX's tty limit). Push a script and run that. Its `wait` returns when telnet answers, before rc2 finishes: wait for `console login` in the console log if rc scripts matter. `reboot` over it does not take effect; power off with `shutdown -p` and start iris again.
+- **`boot-ip28.sh`'s ports are fixed, and iris starts anyway if they are taken.** Port 12323 may then reach another session's guest, so check `lsof -iTCP:12323 -sTCP:LISTEN` before booting and `ls /share` before running anything.
+- **The package's `vioser.o` must stay unstripped**: `ml` needs its symbols and relocations, so the idb marks it `nostrip`, and `mach(CPUBOARD=...)` picks each board's copy for one install path.
 - **The guest's `/share` mounts late**, and is `noexec` for practical purposes: `mount /share` if it is empty, and build into `/tmp`.
 
 ## What has run
