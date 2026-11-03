@@ -4,7 +4,7 @@
  * Queue layout: 0/1 receive and transmit for port 0, 2/3 control receive and
  * transmit, then 2p+2 / 2p+3 for port p.  "Receive" is the guest's view.
  *
- * Ports are discovered once, polling the control queue in vioser_core_attach,
+ * Ports are discovered once, polling the control queue in vs_attach,
  * before the interrupt is connected: a device announces its ports in answer to
  * DEVICE_READY and the driver needs process context to answer them.  The rings
  * ask for no interrupts until then, since a line asserted with no handler behind
@@ -12,7 +12,7 @@
  * host end opening and closing, which need no reply, so the interrupt handler
  * never sends.
  *
- * A slot whose line reaches no handler (VIOSER_NO_INTR) keeps its rings quiet
+ * A slot whose line reaches no handler (VIRTIO_NO_INTR) keeps its rings quiet
  * for good and is serviced from a timeout instead.
  *
  * Locking: sc_lock is a spinlock taken at plhi and covers the queues and all
@@ -45,7 +45,7 @@
 #include <sys/uio.h>
 
 #include "vioser.h"
-#include "vioser_impl.h"
+#include "virtio_bus.h"
 #include "virtq.h"
 
 /* Driver entry points and flags the kernel looks up by prefix. */
@@ -73,7 +73,7 @@ char		*vioser_mversion = M_VERSION;
 #define VS_CTL_BUFS		VS_QSIZE
 #define VS_CTL_BYTES		256
 
-/* How long vioser_core_attach polls for the port handshake, in milliseconds. */
+/* How long vs_attach polls for the port handshake, in milliseconds. */
 #define VS_HANDSHAKE_MS		5000
 /* With every port answered, how long the control queue must stay quiet. */
 #define VS_QUIET_MS		200
@@ -123,7 +123,7 @@ struct vs_port {
 };
 
 struct vioser_softc {
-	const struct vioser_bus_ops *sc_ops;
+	const struct virtio_bus_ops *sc_ops;
 	void		*sc_bus;
 	lock_t		*sc_lock;
 	mutex_t		*sc_openlock;	/* serializes open and close */
@@ -215,7 +215,7 @@ vs_queue_init(struct vioser_softc *sc, unsigned int qi)
 	size_t dlen, alen, ulen;
 	unsigned char *mem;
 	unsigned int max;
-	const struct vioser_bus_ops *ops = sc->sc_ops;
+	const struct virtio_bus_ops *ops = sc->sc_ops;
 
 	max = ops->queue_max(sc->sc_bus, qi);
 	if (max < VS_QSIZE) {
@@ -345,7 +345,7 @@ vs_ctl_handle(struct vioser_softc *sc, struct vs_buf *b)
 
 	switch (event) {
 	case CTL_DEVICE_ADD:
-		/* Ports are published once, in vioser_core_attach. */
+		/* Ports are published once, in vs_attach. */
 		if (sc->sc_attached)
 			cmn_err(CE_WARN, "vioser: port %d added late, ignored",
 			    id);
@@ -522,9 +522,11 @@ vs_service(struct vioser_softc *sc)
 	}
 }
 
-void
-vioser_intr(struct vioser_softc *sc)
+static void
+vs_intr(void *arg)
 {
+	struct vioser_softc *sc = arg;
+
 	if (sc->sc_ops->intr_ack(sc->sc_bus) != 0)
 		vs_service(sc);
 }
@@ -671,7 +673,7 @@ vs_teardown(struct vioser_softc *sc)
 static int
 vs_negotiate(struct vioser_softc *sc)
 {
-	const struct vioser_bus_ops *ops = sc->sc_ops;
+	const struct virtio_bus_ops *ops = sc->sc_ops;
 	__uint32_t f0, f1;
 
 	ops->set_status(sc->sc_bus, 0);
@@ -699,9 +701,8 @@ vs_negotiate(struct vioser_softc *sc)
 	return 0;
 }
 
-int
-vioser_core_attach(const struct vioser_bus_ops *ops, void *bus,
-	      struct vioser_softc **scp)
+static int
+vs_attach(const struct virtio_bus_ops *ops, void *bus, void **scp)
 {
 	struct vioser_softc *sc;
 	unsigned int i, nports;
@@ -776,7 +777,7 @@ vioser_core_attach(const struct vioser_bus_ops *ops, void *bus,
 	}
 
 	err = ops->intr_connect(bus, sc);
-	if (err == VIOSER_NO_INTR) {
+	if (err == VIRTIO_NO_INTR) {
 		cmn_err(CE_NOTE, "vioser: no interrupt on this slot, polling");
 		sc->sc_polled = 1;
 		sc->sc_poll_id = itimeout(vs_poll_tick, sc,
@@ -801,9 +802,10 @@ fail:
 	return err;
 }
 
-int
-vioser_core_detach(struct vioser_softc *sc)
+static int
+vs_detach(void *arg)
 {
+	struct vioser_softc *sc = arg;
 	unsigned int i;
 
 	MUTEX_LOCK(sc->sc_openlock, -1);
@@ -1091,18 +1093,37 @@ vioser_poll(dev_t dev, short events, int anyyet, short *reventsp,
 
 /* -------- module load and unload -------- */
 
+static const struct virtio_driver vs_driver = {
+	"vioser",
+	VIRTIO_ID_CONSOLE,
+	vs_attach,
+	vs_detach,
+	vs_intr,
+};
+
+#ifdef IP30
+extern int virtio_pci_attach(vertex_hdl_t);
+
+/* The kernel calls this for each function the driver registered for. */
+int
+vioser_attach(vertex_hdl_t conn)
+{
+	return virtio_pci_attach(conn);
+}
+#endif
+
 /* The driver is loaded with ml(1M); see driver/vioser.init. */
 void
 vioser_init(void)
 {
 	int err;
 
-	if ((err = vioser_bus_init()) != 0 && err != ENODEV)
+	if ((err = virtio_bus_init(&vs_driver, "vioser_")) != 0 && err != ENODEV)
 		cmn_err(CE_WARN, "vioser: attach failed, error %d", err);
 }
 
 int
 vioser_unload(void)
 {
-	return vioser_bus_fini();
+	return virtio_bus_fini("vioser_");
 }

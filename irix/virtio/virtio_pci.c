@@ -1,6 +1,6 @@
 /*
  * virtio-pci (modern) transport, for the Octane (IP30): vendor 0x1af4, device
- * 0x1043, on the Bridge.
+ * 0x1040 + the virtio device ID, on the Bridge.
  *
  * The four structures are found by walking the vendor capabilities.  PIO is
  * mapped as word values, so a 32-bit access reads the device's number; a
@@ -24,10 +24,10 @@
 #include <sys/PCI/PCI_defs.h>
 #include <sys/PCI/pciio.h>
 
-#include "vioser_impl.h"
+#include "virtio_bus.h"
 
 #define VIRTIO_PCI_VENDOR	0x1af4
-#define VIRTIO_PCI_CONSOLE	0x1043
+#define VIRTIO_PCI_MODERN_BASE	0x1040
 
 #define PCI_CAP_VENDOR		0x09
 /* cfg_type in a virtio_pci_cap. */
@@ -59,11 +59,12 @@ struct pci_bus {
 	volatile unsigned char	*device;
 	volatile unsigned char	*notify;
 	__uint32_t		notify_mult;
-	struct vioser_softc	*sc;
+	void			*sc;
 	struct pci_bus		*next;
 };
 
 static struct pci_bus *pci_buses;
+static const struct virtio_driver *pci_drv;
 
 #define R32(p, off)	(*(volatile __uint32_t *)((p) + (off)))
 #define R16(p, off)	(*(volatile unsigned short *)((p) + ((off) ^ 2)))
@@ -176,11 +177,11 @@ pci_intr(intr_arg_t arg)
 
 	/* The line is shared: only act on an interrupt that was ours. */
 	if (b->sc != 0)
-		vioser_intr(b->sc);
+		pci_drv->vd_intr(b->sc);
 }
 
 static int
-pci_intr_connect(void *bus, struct vioser_softc *sc)
+pci_intr_connect(void *bus, void *sc)
 {
 	struct pci_bus *b = bus;
 
@@ -198,7 +199,7 @@ pci_intr_connect(void *bus, struct vioser_softc *sc)
 
 /*ARGSUSED*/
 static void
-pci_intr_disconnect(void *bus, struct vioser_softc *sc)
+pci_intr_disconnect(void *bus, void *sc)
 {
 	struct pci_bus *b = bus;
 
@@ -210,7 +211,7 @@ pci_intr_disconnect(void *bus, struct vioser_softc *sc)
 	b->sc = 0;
 }
 
-static const struct vioser_bus_ops pci_ops = {
+static const struct virtio_bus_ops pci_ops = {
 	pci_get_features,
 	pci_set_features,
 	pci_get_status,
@@ -276,12 +277,12 @@ pci_find_caps(struct pci_bus *b)
 	return 0;
 }
 
-/* The kernel calls this for each function the driver registered for. */
+/* The driver's prefix "attach" entry point calls this for each function. */
 int
-vioser_attach(vertex_hdl_t conn)
+virtio_pci_attach(vertex_hdl_t conn)
 {
 	struct pci_bus *b;
-	struct vioser_softc *sc;
+	void *sc;
 	__uint32_t cmd;
 	int err;
 
@@ -291,7 +292,7 @@ vioser_attach(vertex_hdl_t conn)
 	pciio_config_set(conn, PCI_CFG_COMMAND, 2,
 	    cmd | PCI_CMD_MEM_SPACE | PCI_CMD_BUS_MASTER);
 	if ((err = pci_find_caps(b)) != 0 ||
-	    (err = vioser_core_attach(&pci_ops, b, &sc)) != 0) {
+	    (err = pci_drv->vd_attach(&pci_ops, b, &sc)) != 0) {
 		kmem_free(b, sizeof(*b));
 		return err;
 	}
@@ -302,25 +303,26 @@ vioser_attach(vertex_hdl_t conn)
 }
 
 int
-vioser_bus_init(void)
+virtio_bus_init(const struct virtio_driver *drv, char *pci_prefix)
 {
-	return pciio_driver_register(VIRTIO_PCI_VENDOR, VIRTIO_PCI_CONSOLE,
-	    "vioser_", 0);
+	pci_drv = drv;
+	return pciio_driver_register(VIRTIO_PCI_VENDOR,
+	    VIRTIO_PCI_MODERN_BASE + drv->vd_device_id, pci_prefix, 0);
 }
 
 int
-vioser_bus_fini(void)
+virtio_bus_fini(char *pci_prefix)
 {
 	struct pci_bus *b;
 	int err;
 
 	while ((b = pci_buses) != 0) {
-		if ((err = vioser_core_detach(b->sc)) != 0)
+		if ((err = pci_drv->vd_detach(b->sc)) != 0)
 			return err;
 		pci_buses = b->next;
 		kmem_free(b, sizeof(*b));
 	}
-	pciio_driver_unregister("vioser_");
+	pciio_driver_unregister(pci_prefix);
 	return 0;
 }
 

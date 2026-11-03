@@ -1,5 +1,5 @@
 /*
- * Split virtqueue (virtio 1.x), single-descriptor chains only.
+ * Split virtqueue (virtio 1.x).
  *
  * Everything the device reads or writes is little-endian whatever the CPU is.
  * This file and virtq.c know nothing about the kernel: the owner allocates the
@@ -82,6 +82,21 @@ int	virtq_init(struct virtq *vq, unsigned int num, void *desc, void *avail,
  */
 int	virtq_add(struct virtq *vq, vq_u64 addr, vq_u32 len, int device_writes,
 		  void *cookie);
+
+/* One buffer of a chain. */
+struct vq_seg {
+	vq_u64	addr;
+	vq_u32	len;
+	int	device_writes;
+};
+
+/*
+ * Queue n buffers as one chain, for a device that takes a request and its reply
+ * together.  The used ring reports the chain once, under this cookie.  Returns
+ * 0, or -1 when the ring has too few free descriptors.
+ */
+int	virtq_add_chain(struct virtq *vq, const struct vq_seg *segs, unsigned int n,
+			void *cookie);
 
 /* Publish what virtq_add queued.  Returns how many; 0 needs no notify. */
 int	virtq_publish(struct virtq *vq);

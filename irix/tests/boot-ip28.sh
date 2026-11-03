@@ -9,6 +9,8 @@
 #                 irix65.raw, ip28-nvram.bin, ip28-nveeprom.bin
 # VIRTIO_SLOT     GIO slot, exp0 (interrupts) or exp1 (polled: an Indigo2 kernel
 #                 dispatches no slot 1 interrupts).  Default exp0.
+# P9_SHARE        a host directory to add as a virtio-9p share with tag "share",
+#                 in the other slot.  P9_READONLY=1 makes it read-only.
 #
 # Disk writes go to irix65.raw.overlay beside the image, so the base image
 # stays clean and deleting the overlay undoes everything.  The ports are
@@ -27,6 +29,11 @@ if [ -e "$inst/irix65.raw.overlay" ] && lsof -t "$inst/irix65.raw.overlay" >/dev
 	exit 1
 fi
 mkdir -p "$work"
+
+case "$slot" in
+exp0) p9_slot=exp1 ;;
+*)    p9_slot=exp0 ;;
+esac
 
 cat > "$work/iris.toml" <<EOF
 headless   = true
@@ -68,6 +75,17 @@ socket = "agent.sock"
 [[virtio_serial.port]]
 name   = "org.iris.unwired.0"
 EOF
+
+if [ -n "${P9_SHARE:-}" ]; then
+	cat >> "$work/iris.toml" <<EOF
+[virtio_9p]
+enabled  = true
+slot     = "$p9_slot"
+path     = "$P9_SHARE"
+tag      = "share"
+readonly = $([ "${P9_READONLY:-0}" = 1 ] && echo true || echo false)
+EOF
+fi
 
 echo "workdir: $work"
 cd "$work"

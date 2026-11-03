@@ -264,9 +264,90 @@ static void test_sync_ops_run_where_the_device_needs_them(void)
 	assert(inv_calls == 1);		/* the used ring, before it is read */
 }
 
+/* The fake device walks a chain as the spec has it: by flags and next. */
+static void test_chains(void)
+{
+	struct virtq vq;
+	struct dev d;
+	void *cookies[NUM];
+	struct vq_seg segs[3];
+	int a, b;
+	uint32_t len, head;
+	unsigned char *dp;
+
+	setup(&vq, &d, cookies);
+	segs[0].addr = 0x1000;
+	segs[0].len = 16;
+	segs[0].device_writes = 0;
+	segs[1].addr = 0x2000;
+	segs[1].len = 32;
+	segs[1].device_writes = 1;
+	segs[2].addr = 0x3000;
+	segs[2].len = 64;
+	segs[2].device_writes = 1;
+	assert(virtq_add_chain(&vq, segs, 0, &a) == -1);
+	assert(virtq_add_chain(&vq, segs, 3, &a) == 0);
+	assert(vq.num_free == NUM - 3);
+	assert(virtq_publish(&vq) == 1);
+
+	head = rd16(d.avail + 4);
+	dp = d.desc + 16 * head;
+	assert(rd64(dp) == 0x1000 && rd32(dp + 8) == 16);
+	assert(rd16(dp + 12) == VRING_DESC_F_NEXT);
+	dp = d.desc + 16 * rd16(dp + 14);
+	assert(rd64(dp) == 0x2000 && rd32(dp + 8) == 32);
+	assert(rd16(dp + 12) == (VRING_DESC_F_NEXT | VRING_DESC_F_WRITE));
+	dp = d.desc + 16 * rd16(dp + 14);
+	assert(rd64(dp) == 0x3000 && rd32(dp + 8) == 64);
+	assert(rd16(dp + 12) == VRING_DESC_F_WRITE);
+
+	/* More than are free is refused, with nothing taken. */
+	assert(virtq_add_chain(&vq, segs, 3, &b) == 0);
+	assert(virtq_publish(&vq) == 1);
+	assert(vq.num_free == NUM - 6);
+	assert(virtq_add_chain(&vq, segs, 3, &b) == -1);
+	assert(vq.num_free == NUM - 6);
+
+	/* The whole chain comes back when the device reports its head. */
+	wr32(d.used + 4, head);
+	wr32(d.used + 8, 40);
+	wr16(d.used + 2, 1);
+	assert(virtq_get_used(&vq, &len) == &a);
+	assert(len == 40);
+	assert(vq.num_free == NUM - 3);
+
+	/* Round and round: descriptors are not lost or reused while in flight. */
+	{
+		int token[NUM];
+		uint16_t idx = 1, avail_at = 2;
+		int round;
+
+		wr32(d.used + 12, rd16(d.avail + 6));
+		wr32(d.used + 16, 0);
+		idx = 2;
+		wr16(d.used + 2, idx);
+		assert(virtq_get_used(&vq, &len) == &b);
+		assert(vq.num_free == NUM);
+		for (round = 0; round < 20; round++) {
+			assert(virtq_add_chain(&vq, segs, 2, &token[round % NUM]) == 0);
+			assert(virtq_publish(&vq) == 1);
+			head = rd16(d.avail + 4 + 2 * (avail_at % NUM));
+			avail_at++;
+			wr32(d.used + 4 + 8 * (idx % NUM), head);
+			wr32(d.used + 8 + 8 * (idx % NUM), 7);
+			idx++;
+			wr16(d.used + 2, idx);
+			assert(virtq_get_used(&vq, &len) == &token[round % NUM]);
+			assert(len == 7);
+			assert(vq.num_free == NUM);
+		}
+	}
+}
+
 int main(void)
 {
 	test_bad_size();
+	test_chains();
 	test_layout_is_little_endian();
 	test_round_trip_and_wrap();
 	test_full_ring_and_out_of_order();

@@ -103,30 +103,48 @@ virtq_init(struct virtq *vq, unsigned int num, void *desc, void *avail,
 }
 
 int
-virtq_add(struct virtq *vq, vq_u64 addr, vq_u32 len, int device_writes,
-	  void *cookie)
+virtq_add_chain(struct virtq *vq, const struct vq_seg *segs, unsigned int n,
+		void *cookie)
 {
-	vq_u16 head;
+	vq_u16 head, i, flags;
+	unsigned int k;
 	unsigned char *d;
 
-	if (vq->num_free == 0)
+	if (n == 0 || n > vq->num_free)
 		return -1;
-	head = vq->free_head;
-	d = DESC(vq, head);
-	vq->free_head = get16(d + 14);
-	vq->num_free--;
+	head = i = vq->free_head;
+	for (k = 0; k < n; k++) {
+		d = DESC(vq, i);
+		put64(d, segs[k].addr);
+		put32(d + 8, segs[k].len);
+		flags = segs[k].device_writes ? VRING_DESC_F_WRITE : 0;
+		if (k + 1 < n)
+			flags |= VRING_DESC_F_NEXT;
+		put16(d + 12, flags);
+		/* d + 14, next, already leads to the next free descriptor. */
+		vq_wb(vq, d, 16);
+		i = get16(d + 14);
+	}
+	vq->free_head = i;
+	vq->num_free = (vq_u16)(vq->num_free - n);
 	vq->cookie[head] = cookie;
-
-	put64(d, addr);
-	put32(d + 8, len);
-	put16(d + 12, device_writes ? VRING_DESC_F_WRITE : 0);
-	/* d + 14, next, is ours while the descriptor is free; no NEXT flag. */
-	vq_wb(vq, d, 16);
 
 	put16(AVAIL_RING(vq, (vq->avail_idx + vq->unpublished) & (vq->num - 1)),
 	    head);
 	vq->unpublished++;
 	return 0;
+}
+
+int
+virtq_add(struct virtq *vq, vq_u64 addr, vq_u32 len, int device_writes,
+	  void *cookie)
+{
+	struct vq_seg seg;
+
+	seg.addr = addr;
+	seg.len = len;
+	seg.device_writes = device_writes;
+	return virtq_add_chain(vq, &seg, 1, cookie);
 }
 
 int
@@ -150,7 +168,7 @@ virtq_publish(struct virtq *vq)
 void *
 virtq_get_used(struct virtq *vq, vq_u32 *written)
 {
-	vq_u16 idx, head;
+	vq_u16 idx, head, tail;
 	unsigned char *e;
 	void *cookie;
 
@@ -169,9 +187,15 @@ virtq_get_used(struct virtq *vq, vq_u32 *written)
 		*written = get32(e + 4);
 	cookie = vq->cookie[head];
 	vq->cookie[head] = 0;
-	put16(DESC(vq, head) + 14, vq->free_head);
-	vq->free_head = head;
+	/* The whole chain goes back, in the order its next fields already give. */
+	tail = head;
 	vq->num_free++;
+	while (get16(DESC(vq, tail) + 12) & VRING_DESC_F_NEXT) {
+		tail = get16(DESC(vq, tail) + 14);
+		vq->num_free++;
+	}
+	put16(DESC(vq, tail) + 14, vq->free_head);
+	vq->free_head = head;
 	return cookie;
 }
 

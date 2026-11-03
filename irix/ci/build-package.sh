@@ -1,6 +1,6 @@
 #!/bin/sh
-# Build the vioser inst package in the IRIX guest: gendist, the MIPSpro compiler
-# and the kernel headers exist only there.
+# Build the vioser inst package, which holds both drivers, in the IRIX guest:
+# gendist, the MIPSpro compiler and the kernel headers exist only there.
 #
 #   build-package.sh <version> <out-dir>
 #
@@ -18,7 +18,7 @@ boards="IP22 IP28 IP30"
 tmp=/var/tmp/vioser-package-$$
 trap 'cd /; rm -rf $tmp' 0
 root=$tmp/root
-mkdir -p $root/etc/init.d $root/etc/rc2.d $root/etc/rc0.d $root/usr/include/sys $tmp/dist || exit 1
+mkdir -p $root/etc/init.d $root/etc/rc2.d $root/etc/rc0.d $root/usr/include/sys $root/usr/etc $tmp/dist || exit 1
 
 cd $repo/driver || exit 1
 for board in $boards; do
@@ -26,12 +26,18 @@ for board in $boards; do
 	smake CPUBOARD=$board || exit 1
 	mkdir -p $root/usr/lib/vioser/$board || exit 1
 	cp /tmp/vioser.$board/mod/vioser.o $root/usr/lib/vioser/$board/vioser.o || exit 1
+	cp /tmp/vioser.$board/mod/p9fs.o $root/usr/lib/vioser/$board/p9fs.o || exit 1
+	# A user program, and all boards' copies are the same.
+	cp /tmp/vioser.$board/mount_9p $root/usr/etc/mount_9p || exit 1
 	smake CPUBOARD=$board clean
 done
 cp vioser.init $root/etc/init.d/vioser || exit 1
 cp vioser.h $root/usr/include/sys/vioser.h || exit 1
 ln -s ../init.d/vioser $root/etc/rc2.d/S98vioser || exit 1
 ln -s ../init.d/vioser $root/etc/rc0.d/K02vioser || exit 1
+cp p9fs.init $root/etc/init.d/p9fs || exit 1
+ln -s ../init.d/p9fs $root/etc/rc2.d/S98p9fs || exit 1
+ln -s ../init.d/p9fs $root/etc/rc0.d/K02p9fs || exit 1
 
 # Every board's file installs at one path. A kernel module must not be stripped.
 mach="mach(CPUBOARD=IP22 CPUBOARD=IP28 CPUBOARD=IP30)"
@@ -44,11 +50,19 @@ mach="mach(CPUBOARD=IP22 CPUBOARD=IP28 CPUBOARD=IP30)"
 	for board in $boards; do
 		echo "f 0644 root sys usr/lib/vioser/vioser.o usr/lib/vioser/$board/vioser.o vioser.sw.driver mach(CPUBOARD=$board) nostrip norqs"
 	done
+	echo "f 0755 root sys etc/init.d/p9fs etc/init.d/p9fs vioser.sw.p9fs $mach"
+	echo "l 0755 root sys etc/rc2.d/S98p9fs etc/rc2.d/S98p9fs vioser.sw.p9fs $mach symval(../init.d/p9fs)"
+	echo "l 0755 root sys etc/rc0.d/K02p9fs etc/rc0.d/K02p9fs vioser.sw.p9fs $mach symval(../init.d/p9fs)"
+	echo "f 0755 root sys usr/etc/mount_9p usr/etc/mount_9p vioser.sw.p9fs $mach"
+	echo "d 0755 root sys usr/lib/vioser usr/lib/vioser vioser.sw.p9fs $mach"
+	for board in $boards; do
+		echo "f 0644 root sys usr/lib/vioser/p9fs.o usr/lib/vioser/$board/p9fs.o vioser.sw.p9fs mach(CPUBOARD=$board) nostrip norqs"
+	done
 } | sort -k 5,6 > $tmp/vioser.idb
 
 cat > $tmp/vioser.spec <<SPEC
 product vioser
-    id "vioser, a virtio-serial driver for IRIX 6.5 under IRIS"
+    id "vioser, virtio-serial and virtio-9p drivers for IRIX 6.5 under IRIS"
     image sw
         id "vioser kernel module"
         version $ver
@@ -57,6 +71,11 @@ product vioser
             id "vioser module, loaded at boot"
             replaces vioser.sw.driver 0 $ver
             exp vioser.sw.driver
+        endsubsys
+        subsys p9fs default
+            id "9p filesystem module and mount_9p, loaded at boot"
+            replaces vioser.sw.p9fs 0 $ver
+            exp vioser.sw.p9fs
         endsubsys
     endimage
     image dev

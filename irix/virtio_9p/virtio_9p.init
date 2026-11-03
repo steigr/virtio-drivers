@@ -1,0 +1,18 @@
+#!/sbin/sh
+# Load the 9p filesystem at boot and mount what /etc/fstab has of that type.
+case "$1" in
+start)
+	if /sbin/ml ld -j /usr/lib/vioser/p9fs.o -p p9fs_ -a 9p; then
+		/sbin/mount -a -t 9p
+	fi
+	;;
+stop)
+	/sbin/umount -a -t 9p
+	id=`/sbin/ml list -l | awk '/p9fs/ { print $2 }'`
+	[ -n "$id" ] && /sbin/ml unld $id
+	;;
+*)
+	echo "usage: $0 {start|stop}"
+	;;
+esac
+exit 0

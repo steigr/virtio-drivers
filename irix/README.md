@@ -1,12 +1,17 @@
 # virtio drivers for IRIX
 
 Drivers that let IRIX 6.5.22 use virtio devices under the
-[IRIS](irix/iris) emulator. The first is **vioser**, for
-virtio-serial: named, 8-bit-clean byte channels between the guest and the host,
-with no UART, network or disk involved.
+[IRIS](irix/iris) emulator:
 
-The device side is IRIS's `feature/virtio-serial-guest-device-412469` branch;
-its `docs/virtio-serial.md` describes what the driver talks to.
+- **vioser**, for virtio-serial: named, 8-bit-clean byte channels between the guest
+  and the host, with no UART, network or disk involved.
+- **p9fs**, for virtio-9p: a filesystem that mounts a directory on the host, with
+  no network or NFS involved. Programs run from it and `mmap` works, which the NFS
+  `/share` does not manage.
+
+The device side is IRIS's `feature/virtio-9p` branch, on top of
+`feature/virtio-serial-guest-device-412469`; its `docs/virtio-serial.md` and
+`docs/virtio-9p.md` describe what the drivers talk to.
 
 ## Status
 
@@ -23,24 +28,27 @@ The easy way is the inst package, from the
 [`irix` organisation's packages](irix/-/packages/generic/vioser/latest):
 
 ```sh
-inst -f vioser-latest.tardist     # installs the module for this board
-/etc/init.d/vioser start          # or reboot: it loads at every boot
+inst -f vioser-latest.tardist     # installs the modules for this board
+/etc/init.d/vioser start          # or reboot: they load at every boot
+/etc/init.d/p9fs start
 ```
 
 The `dev` image, not selected by default, adds `sys/vioser.h`. Removing the
 package leaves a loaded module in the kernel until the next reboot. With no
-device present the module loads and stays idle.
+device present a module loads and stays idle.
 
 To build it yourself instead, inside IRIX, with MIPSpro and the kernel headers
 installed:
 
 ```sh
 cd driver
-smake            # builds /tmp/vioser.<board>/mod/vioser.o
-smake load       # ml ld
-smake unload     # ml unld
-smake install    # load at every boot; smake uninstall undoes it
+smake            # builds /tmp/vioser.<board>/mod/{vioser,p9fs}.o and mount_9p
+smake load       # ml ld of vioser; smake load9p of the filesystem
+smake unload     # ml unld; smake unload9p
+smake install    # load both at every boot; smake uninstall undoes it
 ```
+
+### virtio-serial
 
 Each port is a character device:
 
@@ -72,12 +80,54 @@ name   = "org.iris.agent.0"
 socket = "/tmp/iris-agent.sock"
 ```
 
+### virtio-9p
+
+```sh
+ml ld -j /usr/lib/vioser/p9fs.o -p p9fs_ -a 9p   # what /etc/init.d/p9fs does
+mount -t 9p share /mnt/host                      # the first word is the device's tag
+mount -t 9p -o aname=some/dir,ro share /mnt/host # a directory of it, read-only
+umount /mnt/host
+```
+
+or in `/etc/fstab`, which `/etc/init.d/p9fs` mounts at boot:
+
+```
+share /mnt/host 9p rw 0 0
+```
+
+`mount_9p` in `/usr/etc` is the helper `mount -t 9p` runs. In `iris.toml`:
+
+```toml
+[virtio_9p]
+enabled = true
+slot    = "exp0"                  # see below, on Indigo2
+path    = "/path/on/the/host"
+tag     = "share"
+uid     = 0                       # who every file appears to belong to
+gid     = 0
+```
+
+What to expect of it:
+
+- **Ownership is one owner for everything**, the configured `uid` and `gid`: the host
+  files have one, the user running IRIS. A guest `chown` is accepted and has no
+  effect. Permission checks happen in the guest, from those and the host's modes.
+- **Data is cached close to open.** A close pushes what was written, and an open or
+  read notices that the host has changed the file. Two sides writing one file at
+  once get no more than that, as over NFS.
+- **Names can change under it**: a file the host renames or removes behaves as the
+  guest had looked it up, until it next looks.
+- Locks are the guest's own, and do not reach the host.
+- FIFOs and device files on the host appear in listings but do not open, and the
+  guest cannot create any.
+
 ### Use `slot = "exp0"` on an Indigo2
 
 IRIS defaults to `exp1`, but an Indigo2 kernel dispatches no interrupts for
 that slot: IP28's `ip22_gio1_intr` only tests the graphics slot and slot 0. The
-driver detects this and polls every 10 ms, so `exp1` works, but `exp0` gets real
-interrupts.
+drivers detect this and poll, so `exp1` works, but `exp0` gets real interrupts.
+A slot holds one device, so with both on, give `exp0` to whichever needs the
+speed: for a filesystem, that is the one.
 
 ## The MIPSpro wrapper
 
@@ -98,7 +148,7 @@ See [CLAUDE.md](CLAUDE.md) for how to run them.
 
 [.forgejo/workflows/package.yml](.forgejo/workflows/package.yml) runs on a push to
 `main` that touches the driver or the packaging, and on demand. On the `irix`
-runner, the IRIX guest compiles a module for each of IP22, IP28 and IP30 and runs
+runner, the IRIX guest compiles both modules for each of IP22, IP28 and IP30 and runs
 `gendist`, then installs and removes the package with `inst`. The runner uploads
 it as the generic package `vioser`, under its version and `latest`, with the
 organisation secret `PACKAGES_TOKEN`.
@@ -110,5 +160,7 @@ that day, such as `2026110202`.
 
 - Ports are found once, when the driver loads. A port added or removed later is
   ignored with a warning.
-- A restored IRIS snapshot leaves the device idle; reload the driver.
-- `vioser` loads with `ml`. It has not been linked statically into a kernel.
+- A restored IRIS snapshot leaves the devices idle; reload the drivers.
+- Both modules load with `ml`. Neither has been linked statically into a kernel.
+- One 9p device per machine. A guest cannot boot from one, and a 9p mount cannot be
+  exported over NFS.
