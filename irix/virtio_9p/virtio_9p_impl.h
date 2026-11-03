@@ -48,6 +48,7 @@ struct p9mount {
 	struct p9node	*pm_hash[P9FS_HASHSZ];
 	struct p9node	*pm_root;
 	p9_u32		pm_rootfid;
+	int		pm_owners;	/* "owners" mount option: ids go to the host */
 };
 
 /* pn_flags */
@@ -93,6 +94,7 @@ struct p9node {
 #define BHV_TO_PM(bdp)	((struct p9mount *)BHV_PDATA(bdp))
 #define VP_TO_PN(vp)	BHV_TO_PN(vn_bhv_base_unlocked(VN_BHV_HEAD(vp)))
 #define PN_CLIENT(pn)	((pn)->pn_mnt->pm_c)
+#define PN_OWNERS(pn)	((pn)->pn_mnt->pm_owners)
 
 extern vnodeops_t	p9fs_vnodeops;
 extern vfsops_t		p9fs_vfsops;

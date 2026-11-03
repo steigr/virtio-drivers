@@ -89,6 +89,7 @@ socket = "/tmp/iris-agent.sock"
 ml ld -j /usr/lib/p9fs/p9fs.o -p p9fs_ -a 9p     # what /etc/init.d/p9fs does
 mount -t 9p share /mnt/host                      # the first word is the device's tag
 mount -t 9p -o aname=some/dir,ro share /mnt/host # a directory of it, read-only
+mount -t 9p -o owners share /mnt/host            # the guest's user and group go to the host
 umount /mnt/host
 ```
 
@@ -111,6 +112,14 @@ gid     = 0
 ```
 
 What to expect of it:
+
+- **`owners` passes the guest's ids to the host.** Without it (and with the device's default
+  `owners = "squash"`) there is one owner, as in the next point. With `mount -o owners` the
+  driver follows every create, mkdir and symlink with a `Tsetattr` of the creator's user and
+  group, and sends a guest `chown`/`chgrp` (CAP_CHOWN needed, or the owner changing the group
+  to one it is in). The device, with `owners = "passthrough"` and optionally `uid_map` /
+  `gid_map`, makes them on the host (see its `docs/virtio-9p.md`) and reports the host's
+  owners back; an id its maps lack is refused (`EPERM`). The device trusts what the guest says.
 
 - **Ownership is one owner for everything**, the configured `uid` and `gid`: the host
   files have one, the user running IRIS. A guest `chown` is accepted and has no

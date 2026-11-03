@@ -42,6 +42,24 @@ static unsigned int p9fs_minor;
 #define OPTS_MAX	256
 #define SPEC_MAX	80
 
+/* Whether the comma-separated list has the bare word name. */
+static int
+opt_has(const char *opts, const char *name)
+{
+	size_t nlen = strlen(name);
+	const char *p = opts;
+
+	while (*p != 0) {
+		if (strncmp(p, name, nlen) == 0 && (p[nlen] == 0 || p[nlen] == ','))
+			return 1;
+		while (*p != 0 && *p != ',')
+			p++;
+		if (*p == ',')
+			p++;
+	}
+	return 0;
+}
+
 /* The value of "name=" in a comma-separated list, into val. */
 static int
 opt_get(const char *opts, const char *name, char *val, size_t cap)
@@ -78,7 +96,7 @@ p9fs_mount(struct vfs *vfsp, struct vnode *mvp, struct mounta *uap, char *attrs,
 	char spec[SPEC_MAX];
 	char *opts, *aname;
 	size_t got;
-	int err;
+	int err, owners = 0;
 
 	if (!_CAP_CRABLE(cr, CAP_MOUNT_MGT))
 		return EPERM;
@@ -100,11 +118,13 @@ p9fs_mount(struct vfs *vfsp, struct vnode *mvp, struct mounta *uap, char *attrs,
 			goto out;
 		}
 		(void)opt_get(opts, "aname", aname, OPTS_MAX);
+		owners = opt_has(opts, "owners");
 	}
 
 	pm = kmem_zalloc(sizeof(*pm), KM_SLEEP);
 	pm->pm_vfs = vfsp;
 	pm->pm_c = c;
+	pm->pm_owners = owners;
 	pm->pm_hashlock = MUTEX_ALLOC(MUTEX_DEFAULT, KM_SLEEP, "p9hash");
 	pm->pm_rootfid = p9dev_newfid();
 	if ((err = p9_attach(c, pm->pm_rootfid, aname, &qid)) != 0)

@@ -383,6 +383,41 @@ pn_owner(struct p9node *pn, struct cred *cr)
 	return cr->cr_uid == pn->pn_attr.uid || _CAP_CRABLE(cr, CAP_FOWNER);
 }
 
+/*
+ * With the owners mount option, the host should record who made an entry.  A
+ * create carries the creator's group but 9P2000.L's has no room for the user,
+ * so the user and group follow in a Tsetattr, on any fid that names the entry.
+ * The device refuses nothing here: it does as its owners option says, and a
+ * device that squashes owners accepts and ignores this.
+ */
+static void
+pn_give(struct p9node *dpn, p9_u32 fid, struct cred *cr)
+{
+	struct p9_setattr s;
+
+	if (!PN_OWNERS(dpn))
+		return;
+	bzero(&s, sizeof(s));
+	s.valid = P9_SETATTR_UID | P9_SETATTR_GID;
+	s.uid = (p9_u32)cr->cr_uid;
+	s.gid = (p9_u32)cr->cr_gid;
+	(void)p9_setattr(PN_CLIENT(dpn), fid, &s);
+}
+
+/* The same for an entry that has no fid yet: walk to it by name. */
+static void
+pn_give_name(struct p9node *dpn, char *name, struct cred *cr)
+{
+	p9_u32 fid;
+
+	if (!PN_OWNERS(dpn))
+		return;
+	fid = p9dev_newfid();
+	if (p9_walk(PN_CLIENT(dpn), dpn->pn_fid, fid, name, 0) == 0)
+		pn_give(dpn, fid, cr);
+	(void)p9_clunk(PN_CLIENT(dpn), fid);
+}
+
 /* Walk dpn to name and make the node, with its vnode held. */
 static int
 pn_walk(struct p9node *dpn, char *name, struct p9node **pnp)
@@ -537,9 +572,31 @@ p9fs_setattr(bhv_desc_t *bdp, struct vattr *vap, int flags, struct cred *cr)
 		s.mode = vap->va_mode & MODEMASK;
 	}
 	if (mask & (AT_UID | AT_GID)) {
-		/* Files have the one owner the device reports; nothing to record. */
-		if (!_CAP_CRABLE(cr, CAP_CHOWN) && !pn_owner(pn, cr))
+		if (PN_OWNERS(pn)) {
+			/*
+			 * The owner is real: it takes CAP_CHOWN to change it, or
+			 * for the owner to hand the file to a group it is in.
+			 */
+			if ((mask & AT_UID) && vap->va_uid != pn->pn_attr.uid &&
+			    !_CAP_CRABLE(cr, CAP_CHOWN))
+				return EPERM;
+			if ((mask & AT_GID) && vap->va_gid != pn->pn_attr.gid &&
+			    !_CAP_CRABLE(cr, CAP_CHOWN) &&
+			    !(cr->cr_uid == pn->pn_attr.uid &&
+			      groupmember(vap->va_gid, cr)))
+				return EPERM;
+			if (mask & AT_UID) {
+				s.valid |= P9_SETATTR_UID;
+				s.uid = (p9_u32)vap->va_uid;
+			}
+			if (mask & AT_GID) {
+				s.valid |= P9_SETATTR_GID;
+				s.gid = (p9_u32)vap->va_gid;
+			}
+		} else if (!_CAP_CRABLE(cr, CAP_CHOWN) && !pn_owner(pn, cr)) {
+			/* Files have the one owner the device reports; nothing to record. */
 			return EPERM;
+		}
 	}
 	if (mask & (AT_ATIME | AT_MTIME)) {
 		/* Setting a given time takes the owner; "now" takes write access. */
@@ -732,6 +789,7 @@ p9fs_create(bhv_desc_t *bdp, char *name, struct vattr *vap, int flags, int mode,
 		return err;
 	}
 	pn_dir_changed(dpn);
+	pn_give(dpn, ofid, cr);
 	pfid = p9dev_newfid();
 	if ((err = p9_walk(c, dpn->pn_fid, pfid, name, 0)) != 0 ||
 	    (err = p9_getattr(c, pfid, &a)) != 0) {
@@ -890,6 +948,7 @@ p9fs_mkdir(bhv_desc_t *bdp, char *name, struct vattr *vap, vnode_t **vpp,
 	if (err != 0)
 		return err;
 	pn_dir_changed(dpn);
+	pn_give_name(dpn, name, cr);
 	if ((err = pn_walk(dpn, name, &pn)) != 0)
 		return err;
 	*vpp = pn->pn_vp;
@@ -949,8 +1008,10 @@ p9fs_symlink(bhv_desc_t *bdp, char *name, struct vattr *vap, char *target,
 	if ((err = pn_access(dpn, VWRITE | VEXEC, cr)) != 0)
 		return err;
 	err = p9_symlink(PN_CLIENT(dpn), dpn->pn_fid, name, target, cr->cr_gid, &q);
-	if (err == 0)
+	if (err == 0) {
 		pn_dir_changed(dpn);
+		pn_give_name(dpn, name, cr);
+	}
 	return err;
 }
 
