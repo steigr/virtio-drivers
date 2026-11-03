@@ -1,46 +1,62 @@
 #!/bin/sh
-# Install the package with inst in the IRIX guest, check what landed, and remove
-# it again. Nothing is loaded: a build node should not run a driver under test,
-# and may not have the device.
+# Install a package with inst in the IRIX guest, check what landed, and remove it
+# again. Nothing is loaded: a build node should not run a driver under test, and
+# may not have the device.
 #
-#   test-package.sh <tardist>
-tardist=$1
-log=/var/tmp/vioser-inst-$$.log
-obj=/usr/lib/vioser/vioser.o
-obj9p=/usr/lib/vioser/p9fs.o
+#   test-package.sh <vioser|p9fs> <tardist>
+product=$1
+tardist=$2
+log=/var/tmp/$product-inst-$$.log
 fail() { echo "PACKAGE TEST FAILED: $*"; exit 1; }
-remove() { /usr/sbin/inst -a -R vioser > $log 2>&1; }
+remove() { /usr/sbin/inst -a -R $product > $log 2>&1; }
+
+# The module, a symbol ml needs from it, and everything else the package installs.
+case "$product" in
+vioser)
+	obj=/usr/lib/vioser/vioser.o; sym=vioser_init
+	files="/etc/init.d/vioser"
+	links="/etc/rc2.d/S98vioser /etc/rc0.d/K02vioser"
+	;;
+p9fs)
+	obj=/usr/lib/p9fs/p9fs.o; sym=p9fs_vfsops
+	files="/etc/init.d/p9fs /usr/etc/mount_9p"
+	links="/etc/rc2.d/S98p9fs /etc/rc0.d/K02p9fs"
+	;;
+*)
+	echo "usage: $0 <vioser|p9fs> <tardist>"; exit 2
+	;;
+esac
+[ -f "$tardist" ] || { echo "usage: $0 <vioser|p9fs> <tardist>"; exit 2; }
+libdir=`dirname $obj`
+
 trap 'cd /; remove; rm -f $log' 0
 cd / || exit 1
 
-/usr/sbin/inst -a -f $tardist -I vioser > $log 2>&1
+/usr/sbin/inst -a -f $tardist -I $product > $log 2>&1
 tail -3 $log
 grep 'Installations and removals were successful' $log > /dev/null || { cat $log; fail "inst"; }
-/usr/sbin/versions -n vioser | cat
+/usr/sbin/versions -n $product | cat
 
-for f in $obj $obj9p /etc/init.d/vioser /etc/init.d/p9fs /usr/etc/mount_9p; do
+for f in $obj $files; do
 	[ -f $f ] || fail "missing $f"
 done
-for f in /etc/rc2.d/S98vioser /etc/rc0.d/K02vioser /etc/rc2.d/S98p9fs /etc/rc0.d/K02p9fs; do
+for f in $links; do
 	[ -f $f ] || fail "$f does not lead to the init script"
 done
 # ml needs the symbol table and relocations, and this board's ABI.
-/usr/bin/nm $obj 2>/dev/null | grep vioser_init > /dev/null || fail "$obj has no symbols"
-/usr/bin/nm $obj9p 2>/dev/null | grep p9fs_vfsops > /dev/null || fail "$obj9p has no symbols"
+/usr/bin/nm $obj 2>/dev/null | grep $sym > /dev/null || fail "$obj has no symbols"
 case `uname -m` in
 IP22) abi=N32 ;;
 *)    abi=64-bit ;;
 esac
-/usr/bin/file $obj $obj9p | cat
+/usr/bin/file $obj | cat
 /usr/bin/file $obj | grep "$abi" > /dev/null || fail "$obj is not $abi"
-/usr/bin/file $obj9p | grep "$abi" > /dev/null || fail "$obj9p is not $abi"
 
 remove
 grep 'Installations and removals were successful' $log > /dev/null || { cat $log; fail "inst -R"; }
-for f in $obj $obj9p /etc/init.d/vioser /etc/init.d/p9fs /usr/etc/mount_9p \
-    /etc/rc2.d/S98vioser /etc/rc0.d/K02vioser /etc/rc2.d/S98p9fs /etc/rc0.d/K02p9fs; do
+for f in $obj $files $links; do
 	[ ! -f $f ] || fail "$f left behind after removal"
 done
-[ ! -d /usr/lib/vioser ] || fail "/usr/lib/vioser left behind after removal"
+[ ! -d $libdir ] || fail "$libdir left behind after removal"
 trap 'rm -f $log' 0
-echo "PACKAGE TEST OK"
+echo "PACKAGE TEST OK: $product"

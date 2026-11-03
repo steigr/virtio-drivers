@@ -24,17 +24,20 @@ The device side is IRIS's `feature/virtio-9p` branch, on top of
 
 ## Using it
 
-The easy way is the inst package, from the
-[`irix` organisation's packages](irix/-/packages/generic/vioser/latest):
+The easy way is the inst packages, one for each driver, from the `irix`
+organisation's packages:
+[`vioser`](irix/-/packages/generic/vioser/latest) and
+[`p9fs`](irix/-/packages/generic/p9fs/latest).
 
 ```sh
-inst -f vioser-latest.tardist     # installs the modules for this board
-/etc/init.d/vioser start          # or reboot: they load at every boot
+inst -f vioser-latest.tardist     # installs the module for this board
+/etc/init.d/vioser start          # or reboot: it loads at every boot
+inst -f p9fs-latest.tardist       # the same, and mount_9p
 /etc/init.d/p9fs start
 ```
 
-The `dev` image, not selected by default, adds `sys/vioser.h`. Removing the
-package leaves a loaded module in the kernel until the next reboot. With no
+The `dev` image of `vioser`, not selected by default, adds `sys/vioser.h`. Removing
+a package leaves a loaded module in the kernel until the next reboot. With no
 device present a module loads and stays idle.
 
 To build it yourself instead, inside IRIX, with MIPSpro and the kernel headers
@@ -83,7 +86,7 @@ socket = "/tmp/iris-agent.sock"
 ### virtio-9p
 
 ```sh
-ml ld -j /usr/lib/vioser/p9fs.o -p p9fs_ -a 9p   # what /etc/init.d/p9fs does
+ml ld -j /usr/lib/p9fs/p9fs.o -p p9fs_ -a 9p     # what /etc/init.d/p9fs does
 mount -t 9p share /mnt/host                      # the first word is the device's tag
 mount -t 9p -o aname=some/dir,ro share /mnt/host # a directory of it, read-only
 umount /mnt/host
@@ -149,9 +152,9 @@ See [CLAUDE.md](CLAUDE.md) for how to run them.
 [.forgejo/workflows/package.yml](.forgejo/workflows/package.yml) runs on a push to
 `main` that touches the driver or the packaging, and on demand. On the `irix`
 runner, the IRIX guest compiles both modules for each of IP22, IP28 and IP30 and runs
-`gendist`, then installs and removes the package with `inst`. The runner uploads
-it as the generic package `vioser`, under its version and `latest`, with the
-organisation secret `PACKAGES_TOKEN`.
+`gendist`, then installs and removes each package with `inst`. The runner uploads
+them as the generic packages `vioser` and `p9fs`, each under its version and
+`latest`, with the organisation secret `PACKAGES_TOKEN`.
 
 The version is an integer, as inst needs: the commit's UTC date and its number
 that day, such as `2026110202`.

@@ -117,7 +117,8 @@ install: $(MODULE) $(MODULE9P) $(MOUNT9P)
 	chmod a+x /etc/init.d/vioser
 	ln -sf ../init.d/vioser /etc/rc2.d/S98vioser
 	ln -sf ../init.d/vioser /etc/rc0.d/K02vioser
-	cp $(MODULE9P) /usr/lib/vioser/p9fs.o
+	mkdir -p /usr/lib/p9fs
+	cp $(MODULE9P) /usr/lib/p9fs/p9fs.o
 	cp $(MOUNT9P) /usr/etc/mount_9p
 	chmod a+x /usr/etc/mount_9p
 	cp p9fs.init /etc/init.d/p9fs
@@ -129,6 +130,6 @@ uninstall:
 	rm -f /etc/rc2.d/S98vioser /etc/rc0.d/K02vioser /etc/init.d/vioser
 	rm -f /etc/rc2.d/S98p9fs /etc/rc0.d/K02p9fs /etc/init.d/p9fs
 	rm -f /usr/etc/mount_9p
-	rm -rf /usr/lib/vioser
+	rm -rf /usr/lib/vioser /usr/lib/p9fs
 
 .PHONY: all clean load unload load9p unload9p install uninstall

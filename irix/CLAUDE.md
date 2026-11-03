@@ -43,11 +43,11 @@ tests/iris/run_9p_tests.py "$DIR" --mb 64                                   # bu
 # Read-only: boot with P9_READONLY=1 as well, then tests/iris/run_9p_tests.py "$DIR" --readonly
 ```
 
-The inst package, inside IRIX (`.forgejo/workflows/package.yml` runs both, then uploads the result with `packaging/publish-package.sh`):
+The inst packages, inside IRIX (`.forgejo/workflows/package.yml` runs both, then uploads the results with `packaging/publish-package.sh`):
 
 ```sh
-sh /share/packaging/build-package.sh 2026110201 /var/tmp/out   # vioser-2026110201.tardist; /tmp empties at boot
-sh /share/packaging/test-package.sh /var/tmp/out/vioser-2026110201.tardist   # inst install, check, remove; loads nothing
+sh /share/packaging/build-package.sh 2026110201 /var/tmp/out   # vioser- and p9fs-2026110201.tardist; /tmp empties at boot
+sh /share/packaging/test-package.sh p9fs /var/tmp/out/p9fs-2026110201.tardist   # inst install, check, remove; loads nothing
 ```
 
 There is no way to run a single end-to-end test: call the functions in `run_tests.py` and `run_9p_tests.py`, or run `/tmp/vstest` and `/tmp/p9test` by hand (`tests/guest/vstest.c` and `p9test.c` list their modes). A change to the interrupt or polling path needs a run on both `VIRTIO_SLOT=exp0` and `exp1`, since they take different paths. A leftover mount or loaded module from an earlier run spoils the next one: each device can have one driver attached, and loading a second resets it under the first.
