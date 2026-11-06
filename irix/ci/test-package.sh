@@ -3,6 +3,10 @@
 # again. Nothing is loaded: a build node should not run a driver under test, and
 # may not have the device.
 #
+# p9fs is not removed: the CI steps run on the 9p share (/share), and without the package the
+# guest cannot mount it again ("unknown filesystem type: 9p"), so the next job would fail. It
+# stays installed as the newer version; the module that is loaded now keeps running.
+#
 #   test-package.sh <vioser|p9fs> <tardist>
 product=$1
 tardist=$2
@@ -21,6 +25,7 @@ p9fs)
 	obj=/usr/lib/p9fs/p9fs.o; sym=p9fs_vfsops
 	files="/etc/init.d/p9fs /usr/etc/mount_9p"
 	links="/etc/rc2.d/S98p9fs /etc/rc0.d/K02p9fs"
+	keep=1
 	;;
 *)
 	echo "usage: $0 <vioser|p9fs> <tardist>"; exit 2
@@ -29,7 +34,7 @@ esac
 [ -f "$tardist" ] || { echo "usage: $0 <vioser|p9fs> <tardist>"; exit 2; }
 libdir=`dirname $obj`
 
-trap 'cd /; remove; rm -f $log' 0
+if [ -n "${keep:-}" ]; then trap 'rm -f $log' 0; else trap 'cd /; remove; rm -f $log' 0; fi
 cd / || exit 1
 
 /usr/sbin/inst -a -f $tardist -I $product > $log 2>&1
@@ -52,6 +57,10 @@ esac
 /usr/bin/file $obj | cat
 /usr/bin/file $obj | grep "$abi" > /dev/null || fail "$obj is not $abi"
 
+if [ -n "${keep:-}" ]; then
+	echo "PACKAGE TEST OK: $product (kept installed)"
+	exit 0
+fi
 remove
 grep 'Installations and removals were successful' $log > /dev/null || { cat $log; fail "inst -R"; }
 for f in $obj $files $links; do
