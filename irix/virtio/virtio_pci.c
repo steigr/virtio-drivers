@@ -1,15 +1,16 @@
 /*
- * virtio-pci (modern) transport, for the Octane (IP30): vendor 0x1af4, device
- * 0x1040 + the virtio device ID, on the Bridge.
+ * virtio-pci (modern) transport, for the Octane (IP30) and the Tezro (IP35):
+ * vendor 0x1af4, device 0x1040 + the virtio device ID, on the Octane's Bridge
+ * or on bus 1 of the Tezro's IO9 PIC (where IRIS puts the functions).
  *
  * The four structures are found by walking the vendor capabilities.  PIO is
  * mapped as word values, so a 32-bit access reads the device's number; a
  * narrower access has to aim at the byte lane a big-endian CPU drives, hence
  * the XORs in the accessors below.  Rings and buffers are byte streams.
  *
- * Compile-tested only: there has been no IP30 IRIX system to run it on.
+ * Compile-tested only on the Octane: there has been no IP30 IRIX system to run it on.
  */
-#ifdef IP30
+#if defined(IP30) || defined(IP35)
 
 #include <sys/types.h>
 #include <sys/cmn_err.h>
@@ -326,4 +327,4 @@ virtio_bus_fini(char *pci_prefix)
 	return 0;
 }
 
-#endif /* IP30 */
+#endif /* IP30 || IP35 */

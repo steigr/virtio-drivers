@@ -20,6 +20,7 @@ The device side is IRIS's `feature/virtio-9p` branch, on top of
 | Indigo2 IMPACT (IP28) | virtio-mmio on GIO | Runs: tested end to end under IRIS |
 | Indigo2 (IP22), Indy (IP24) | virtio-mmio on GIO | Compiles; never run |
 | Octane (IP30) | virtio-pci on the Bridge | Compiles; never run |
+| Tezro (IP35, IRIX 6.5.30) | virtio-pci on bus 1 of the IO9 PIC | Built on the IP28 (6.5.22 headers) |
 | O2 (IP32) | | Not supported: IRIS does not wire the device there |
 
 ## Using it
@@ -160,7 +161,7 @@ See [CLAUDE.md](CLAUDE.md) for how to run them.
 
 [.forgejo/workflows/package.yml](.forgejo/workflows/package.yml) runs on a push to
 `main` that touches the driver or the packaging, and on demand. On the `irix`
-runner, the IRIX guest compiles both modules for each of IP22, IP28 and IP30 and runs
+runner, the IRIX guest compiles both modules for each of IP22, IP28, IP30 and IP35 and runs
 `gendist`, then installs and removes each package with `inst`. The runner uploads
 them as the generic packages `vioser` and `p9fs`, each under its version and
 `latest`, with the organisation secret `PACKAGES_TOKEN`.

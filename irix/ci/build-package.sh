@@ -15,11 +15,11 @@ esac
 [ -f /var/sysgen/Makefile.kernloadio ] || { echo "no kernel build environment in this system"; exit 1; }
 
 repo=`cd \`dirname $0\`/.. && pwd`
-boards="IP22 IP28 IP30"
+boards="IP22 IP28 IP30 IP35"
 tmp=/var/tmp/vioser-package-$$
 trap 'cd /; rm -rf $tmp' 0
 # Every board's file installs at one path. A kernel module must not be stripped.
-mach="mach(CPUBOARD=IP22 CPUBOARD=IP28 CPUBOARD=IP30)"
+mach="mach(CPUBOARD=IP22 CPUBOARD=IP28 CPUBOARD=IP30 CPUBOARD=IP35)"
 
 # The tree under $tmp/<product>/root, with the <product>.idb.in and <product>.spec
 # written beside it, becomes a tardist in <out-dir>.
