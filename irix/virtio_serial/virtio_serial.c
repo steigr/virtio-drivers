@@ -1101,16 +1101,6 @@ static const struct virtio_driver vs_driver = {
 	vs_intr,
 };
 
-#if defined(IP30) || defined(IP35)
-extern int virtio_pci_attach(vertex_hdl_t);
-
-/* The kernel calls this for each function the driver registered for. */
-int
-vioser_attach(vertex_hdl_t conn)
-{
-	return virtio_pci_attach(conn);
-}
-#endif
 
 /* The driver is loaded with ml(1M); see driver/vioser.init. */
 void

@@ -20,7 +20,7 @@ The device side is IRIS's `feature/virtio-9p` branch, on top of
 | Indigo2 IMPACT (IP28) | virtio-mmio on GIO | Runs: tested end to end under IRIS |
 | Indigo2 (IP22), Indy (IP24) | virtio-mmio on GIO | Compiles; never run |
 | Octane (IP30) | virtio-pci on the Bridge | Compiles; never run |
-| Tezro (IP35, IRIX 6.5.30) | virtio-pci on bus 1 of the IO9 PIC | Built on the IP28 (6.5.22 headers) |
+| Tezro (IP35, IRIX 6.5.30) | virtio-pci on bus 1 of the IO9 PIC | Runs under IRIS: vioser's ports and a 9p mount, modules built on the IP28 (6.5.22 headers) |
 | O2 (IP32) | | Not supported: IRIS does not wire the device there |
 
 ## Using it

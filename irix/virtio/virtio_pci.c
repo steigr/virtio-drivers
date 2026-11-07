@@ -278,8 +278,8 @@ pci_find_caps(struct pci_bus *b)
 	return 0;
 }
 
-/* The driver's prefix "attach" entry point calls this for each function. */
-int
+/* Bring up one function. */
+static int
 virtio_pci_attach(vertex_hdl_t conn)
 {
 	struct pci_bus *b;
@@ -303,14 +303,82 @@ virtio_pci_attach(vertex_hdl_t conn)
 	return 0;
 }
 
+/*
+ * The functions are found by walking the hwgraph for the vertices whose PCI
+ * info names the device (pciio_info_chk is 0 on any other vertex), not with
+ * pciio_driver_register: the attach call that makes needs the driver's devsw,
+ * which p9fs, a filesystem (ml ld -j), has none of, and vioser has only once
+ * its init has returned (on IRIX 6.5.30 the kernel faults on the missing one).
+ * The walk takes real edges only, skips hidden ones (".master" leads back up),
+ * and stops after SCAN_BUDGET edges; a function reached again through an
+ * alias is attached once.  Module load runs it single-threaded, so the edge
+ * name buffer is static, which keeps the recursion's frames small.
+ */
+#define SCAN_DEPTH	16
+#define SCAN_BUDGET	20000
+
+static char	scan_name[LABEL_LENGTH_MAX];
+static int	scan_left;
+
+static int
+pci_attached(vertex_hdl_t conn)
+{
+	struct pci_bus *b;
+
+	for (b = pci_buses; b != 0; b = b->next)
+		if (b->conn == conn)
+			return 1;
+	return 0;
+}
+
+static int
+pci_ours(vertex_hdl_t v)
+{
+	pciio_info_t info = pciio_info_chk(v);
+
+	return info != 0 && pciio_info_vendor_id_get(info) == VIRTIO_PCI_VENDOR &&
+	    pciio_info_device_id_get(info) ==
+	    VIRTIO_PCI_MODERN_BASE + pci_drv->vd_device_id;
+}
+
+static void
+pci_scan(vertex_hdl_t v, int depth)
+{
+	graph_edge_place_t place = EDGE_PLACE_WANT_REAL_EDGES;
+	vertex_hdl_t to;
+	int err;
+
+	while (scan_left > 0 &&
+	    hwgraph_edge_get_next(v, scan_name, &to, &place) == GRAPH_SUCCESS) {
+		scan_left--;
+		if (scan_name[0] != '.') {
+			if (pci_ours(to)) {
+				if (!pci_attached(to) &&
+				    (err = virtio_pci_attach(to)) != 0)
+					cmn_err(CE_WARN, "%s: virtio-pci function "
+					    "not attached, error %d",
+					    pci_drv->vd_name, err);
+			} else if (depth > 0)
+				pci_scan(to, depth - 1);
+		}
+		hwgraph_vertex_unref(to);
+	}
+}
+
+/*ARGSUSED*/
 int
 virtio_bus_init(const struct virtio_driver *drv, char *pci_prefix)
 {
 	pci_drv = drv;
-	return pciio_driver_register(VIRTIO_PCI_VENDOR,
-	    VIRTIO_PCI_MODERN_BASE + drv->vd_device_id, pci_prefix, 0);
+	scan_left = SCAN_BUDGET;
+	pci_scan(hwgraph_root, SCAN_DEPTH);
+	if (pci_buses == 0)
+		return ENODEV;
+	cmn_err(CE_CONT, "%s: virtio-pci device\n", drv->vd_name);
+	return 0;
 }
 
+/*ARGSUSED*/
 int
 virtio_bus_fini(char *pci_prefix)
 {
@@ -323,7 +391,6 @@ virtio_bus_fini(char *pci_prefix)
 		pci_buses = b->next;
 		kmem_free(b, sizeof(*b));
 	}
-	pciio_driver_unregister(pci_prefix);
 	return 0;
 }
 

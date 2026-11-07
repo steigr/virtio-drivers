@@ -68,9 +68,9 @@ struct virtio_driver {
 };
 
 /*
- * Implemented by the transport this kernel was built with.  On a board with
- * PCI the kernel then calls the driver's prefix "attach" for each function;
- * the driver passes that on to virtio_pci_attach.
+ * Implemented by the transport this kernel was built with: virtio_bus_init
+ * finds the driver's devices (GIO slots, or PCI functions in the hwgraph) and
+ * attaches them; ENODEV when there is none.  pci_prefix is unused.
  */
 int	virtio_bus_init(const struct virtio_driver *drv, char *pci_prefix);
 int	virtio_bus_fini(char *pci_prefix);

@@ -402,16 +402,6 @@ static const struct virtio_driver pd_driver = {
 	pd_intr,
 };
 
-#if defined(IP30) || defined(IP35)
-extern int virtio_pci_attach(vertex_hdl_t);
-
-/* The kernel calls this for each function the driver registered for. */
-int
-p9fs_attach(vertex_hdl_t conn)
-{
-	return virtio_pci_attach(conn);
-}
-#endif
 
 /* -------- what the filesystem uses -------- */
 
