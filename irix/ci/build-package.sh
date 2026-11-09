@@ -41,10 +41,13 @@ out=`cd $out && pwd`
 mkdir -p $vroot/etc/init.d $vroot/etc/rc2.d $vroot/etc/rc0.d $vroot/usr/include/sys \
     $proot/etc/init.d $proot/etc/rc2.d $proot/etc/rc0.d $proot/usr/etc || exit 1
 
+# One compile per CPU (hinv's count): the Tezro has four, the Indigo2 one.
+ncpu=`hinv -c processor 2> /dev/null | sed -n 's/^\([0-9][0-9]*\) .* Processors*$/\1/p'`
+case "$ncpu" in ''|*[!0-9]*|0) ncpu=1 ;; esac
 cd $repo/driver || exit 1
 for board in $boards; do
 	smake CPUBOARD=$board clean || exit 1
-	smake CPUBOARD=$board || exit 1
+	smake -J $ncpu CPUBOARD=$board || exit 1
 	mkdir -p $vroot/usr/lib/vioser/$board $proot/usr/lib/p9fs/$board || exit 1
 	cp /tmp/vioser.$board/mod/vioser.o $vroot/usr/lib/vioser/$board/vioser.o || exit 1
 	cp /tmp/vioser.$board/mod/p9fs.o $proot/usr/lib/p9fs/$board/p9fs.o || exit 1
