@@ -1,0 +1,11 @@
+{
+  "name": "VirtioNet",
+  "identifier": "io.virtio.virtio-net",
+  "version": "0.0.0",
+  "title": "Virtio Network",
+  "description": "virtio-net as an Ethernet interface.",
+  "restart": "required",
+  "files": [
+    {"srcdir": "kexts/VirtioNet.kext", "dest": "/System/Library/Extensions/VirtioNet.kext", "filemode": "0644"}
+  ]
+}

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>English</string>
+	<key>CFBundleExecutable</key>
+	<string>VirtioNet</string>
+	<key>CFBundleIdentifier</key>
+	<string>io.virtio.driver.VirtioNet</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>VirtioNet</string>
+	<key>CFBundlePackageType</key>
+	<string>KEXT</string>
+	<key>CFBundleShortVersionString</key>
+	<string>@VERSION@</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleVersion</key>
+	<string>@VERSION@</string>
+	<key>IOKitPersonalities</key>
+	<dict>
+		<!-- QEMU's virtio network device: virtio-net-pci (1af4:1000, legacy or transitional).
+		     By vendor and device where IOPCIFamily matches IOPCIMatch, and by the name OpenBIOS
+		     gives the node where it matches names, as VirtioConsole's pci1af4,1003. Polled set
+		     to true makes the driver poll even where the device's interrupt could be had.
+		     IOProbeScore: on 10.14, AppleVirtIO's generic AppleVirtIOPCITransport matches every
+		     virtio device too, and has no network driver to put on this one; with equal scores
+		     it took the device on some boots and VirtioNet on others (live, 10.14.6, 2026-10-11:
+		     one boot "VirtioNet: 52:54:00:76:6e:30, ..." and the next an AppleVirtIOPCITransport
+		     with no child and no interface). 10.15 drives the device with its own
+		     AppleVirtIONetwork, and VirtioNet is not given to it. -->
+		<key>VirtioNet</key>
+		<dict>
+			<key>CFBundleIdentifier</key>
+			<string>io.virtio.driver.VirtioNet</string>
+			<key>IOClass</key>
+			<string>io_virtio_VirtioNet</string>
+			<key>IOPCIMatch</key>
+			<string>0x10001af4</string>
+			<key>IOProviderClass</key>
+			<string>IOPCIDevice</string>
+			<key>IOProbeScore</key>
+			<integer>50000</integer>
+			<key>Polled</key>
+			<false/>
+		</dict>
+		<key>VirtioNetByName</key>
+		<dict>
+			<key>CFBundleIdentifier</key>
+			<string>io.virtio.driver.VirtioNet</string>
+			<key>IOClass</key>
+			<string>io_virtio_VirtioNet</string>
+			<key>IONameMatch</key>
+			<string>pci1af4,1000</string>
+			<key>IOProviderClass</key>
+			<string>IOPCIDevice</string>
+			<key>IOProbeScore</key>
+			<integer>50000</integer>
+			<key>Polled</key>
+			<false/>
+		</dict>
+	</dict>
+	<key>OSBundleLibraries</key>
+	<dict>
+@LIBRARIES@
+	</dict>
+</dict>
+</plist>
