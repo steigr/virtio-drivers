@@ -22,8 +22,8 @@ there.
 
 Copy the kext to `/System/Library/Extensions`, owned `root:wheel`, then `touch
 /System/Library/Extensions`; it loads at the next boot, or now with `kextload`. The packages from
-the [`macos_virtio_blk`](virtualization/-/packages/generic/macos_virtio_blk/latest)
-generic package, or from `https://updates.$UPDATES_URL/macos_virtio_blk/`, do the same.
+this organisation's
+`macos_virtio_blk` generic package, or from the update publisher's `macos_virtio_blk/`, do the same.
 
 ## Host side
 

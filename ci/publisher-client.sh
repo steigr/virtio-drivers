@@ -1,5 +1,5 @@
 #!/bin/sh
-# Vendored from update publisher/publisher (scripts/publisher-client.sh).
+# Vendored from the update publisher's repository (scripts/publisher-client.sh).
 # Publishes a release through the appcast-publisher, from a Forgejo Actions job:
 #
 #   publisher-client.sh <app> <version> <release> <archive> [<asset>...]

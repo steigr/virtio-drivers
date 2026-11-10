@@ -1,10 +1,10 @@
 # irix/virtio_9p: on the irix runner, the IRIX guest compiles the 9P filesystem over virtio-9p, and mount_9p, for IP22, IP28,
 # IP30 and IP35, runs gendist and installs the package with inst. The runner then publishes it twice: as the
 # generic package irix_virtio_9p of this organisation (under its version and latest), and to the
-# update publisher (irix.the update publisher). Both authenticate with the job's ID token, so nothing secret is
+# update publisher (its IRIX landing page). Both authenticate with the job's ID token, so nothing secret is
 # in the repository: the registry through the Authorized Integration whose audience is the organisation variable
 # AUD (write:package), the publisher through its policy for this repository and workflow. The publisher's
-# address (PUBLISHER_URL) and where the runner keeps the guest's ssh key (IRIS_SSH_DIR) are organisation variables.
+# addresses (PUBLISHER_URL, UPDATES_URL) and where the runner keeps the guest's ssh key (IRIS_SSH_DIR) are organisation variables.
 #
 # The version is an integer, as inst needs: the commit's UTC date and its number that day, such as 2026111001.
 name: irix/virtio_9p
@@ -41,6 +41,7 @@ jobs:
       IRIX_TIMEOUT: 7200
       IRIS_SSH_DIR: ${{ vars.IRIS_SSH_DIR }}
       PUBLISHER_URL: ${{ vars.PUBLISHER_URL }}
+      UPDATES_URL: ${{ vars.UPDATES_URL }}
     timeout-minutes: 60
     steps:
       - name: Fetch this repository
@@ -103,7 +104,7 @@ jobs:
           sh self/ci/publish-package.sh "$PACKAGE" "$ver" "out/$DRIVER-$ver.tardist"
 
       - name: Publish to the update publisher
-        # irix.the update publisher: the publisher stores it in the landing pages' layout, without an appcast. The
+        # The publisher stores it in the landing pages' layout, without an appcast. The
         # changelog (irix/ci/changelog.sh) is the published one with an entry for this build on top.
         env:
           APPCAST: "false"

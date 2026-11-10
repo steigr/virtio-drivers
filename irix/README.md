@@ -1,7 +1,7 @@
 # virtio drivers for IRIX
 
 Loadable kernel modules that let IRIX 6.5 use virtio devices under the
-[IRIS](irix/iris) emulator. IRIS's `docs/virtio-serial.md` and
+IRIS emulator (`irix/iris`). IRIS's `docs/virtio-serial.md` and
 `docs/virtio-9p.md` describe the devices they talk to.
 
 | Folder | What |
@@ -39,9 +39,8 @@ under `/usr/local/mipspro/bin`, where the Makefiles look for it. It is a Bourne 
 
 Each driver is an inst package, with a module for every board in it:
 `inst -f <driver>-latest.tardist`, then `/etc/init.d/<driver> start` or a reboot. They are the
-generic packages `irix_virtio_serial` and `irix_virtio_9p` of the
-[`virtualization`](virtualization/-/packages) organisation, and on
-[irix.the update publisher](https://irix.$UPDATES_URL). They replace the packages of the drivers'
+generic packages `irix_virtio_serial` and `irix_virtio_9p` of the `virtualization`
+organisation, and on the update publisher's IRIX landing page. They replace the packages of the drivers'
 old names, `vioser` and `p9fs`. Removing a package leaves a loaded module in the kernel until the
 next reboot.
 

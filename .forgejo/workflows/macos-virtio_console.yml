@@ -1,7 +1,7 @@
 # macos/virtio_console: builds the kext for PowerPC Mac OS X in the Panther guest beside the macosx-ppc runner, packages
 # it as Installer packages, checks them in the guest, and publishes kexts and packages twice: to this
 # organisation's generic package registry (PACKAGE in macos/virtio_console/component.sh, as <VERSION>.<run number> and
-# latest), and to the update publisher (updates.the update publisher/<PACKAGE>/), which keeps no appcast for a kext.
+# latest), and to the update publisher (<PACKAGE>/ there), which keeps no appcast for a kext.
 #
 # The runner is a host runner with ssh to the guest and a directory shared with it. Where those are, and the
 # publisher's address, come from organisation variables (MACOS_GUEST_SSH, MACOS_SHARE_DIR, MACOS_GUEST_SHARE,

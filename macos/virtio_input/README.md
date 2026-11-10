@@ -21,8 +21,8 @@ there.
 
 Copy the kext to `/System/Library/Extensions`, owned `root:wheel`, then `touch
 /System/Library/Extensions`; it loads at the next boot, or now with `kextload`. The packages from
-the [`macos_virtio_input`](virtualization/-/packages/generic/macos_virtio_input/latest)
-generic package, or from `https://updates.$UPDATES_URL/macos_virtio_input/`, do the same.
+this organisation's
+`macos_virtio_input` generic package, or from the update publisher's `macos_virtio_input/`, do the same.
 
 ## Host side
 

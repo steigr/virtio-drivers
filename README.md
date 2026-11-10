@@ -1,7 +1,7 @@
 # virtio-drivers
 
 Guest drivers for virtio devices on systems that never had them: IRIX 6.5 under the
-[IRIS](irix/iris) emulator, and Mac OS X 10.0 to 10.15 under QEMU. Each driver
+IRIS emulator (`irix/iris`), and Mac OS X 10.0 to 10.15 under QEMU. Each driver
 is named after the virtio device it drives, and has its own folder, build file, README and
 release workflow.
 
@@ -42,11 +42,10 @@ ci/                  runner side, both platforms: package registry and update pu
 Each driver's workflow runs on a push to `main` that touches it, and on demand. It builds the
 driver in its platform's guest, checks the package there, and publishes it twice:
 
-- to this organisation's generic packages, as `<platform>_<driver>`
-  ([list](virtualization/-/packages)), under its version and `latest`;
-- to the update publisher, which serves it at
-  `https://updates.$UPDATES_URL/<platform>_<driver>/`; the IRIX packages are listed on
-  [irix.the update publisher](https://irix.$UPDATES_URL).
+- to this organisation's generic packages, as `<platform>_<driver>`, under its version and
+  `latest`;
+- to the update publisher, which serves it at `$UPDATES_URL/<platform>_<driver>/`; the IRIX
+  packages are also listed on its IRIX landing page.
 
 Both uploads use the job's ID token: the registry accepts it through an Authorized Integration
 whose audience is the organisation variable `AUD`, the publisher through its policy for this
@@ -58,6 +57,7 @@ Everything about the runners and the infrastructure is configured on the organis
 | --- | --- | --- |
 | `AUD` | variable | audience of the Authorized Integration for package uploads |
 | `PUBLISHER_URL` | variable | the update publisher's URL, as the runners reach it |
+| `UPDATES_URL` | variable | where the update publisher serves the packages |
 | `MACOS_GUEST_SSH` | variable | the Panther guest's ssh destination (`user@host`) |
 | `MACOS_SHARE_DIR` | variable | the directory shared with the guest, as the runner sees it |
 | `MACOS_GUEST_SHARE` | variable | the same directory, as the guest sees it |
