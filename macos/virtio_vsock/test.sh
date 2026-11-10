@@ -5,7 +5,7 @@
 #
 # with the kext loaded and `make tools` built in /tmp/virtiovsock in the guest (see README.md):
 #
-#   sh test.sh POD SSH_PORT CID [megabytes]     # e.g. sh test.sh jaguar-guest 2202 302 4
+#   NAMESPACE=ns sh test.sh POD SSH_PORT CID [megabytes]     # e.g. sh test.sh guest-0 2202 302 4
 #
 # The host's end (host-peer.py) runs in the pod, where /dev/vhost-vsock is; the guest's, vsockcat,
 # over `ssh -p SSH_PORT root@127.0.0.1` (a `kubectl port-forward pod/POD SSH_PORT:22` the caller
@@ -23,7 +23,7 @@ guest() {
     echo "$1" | ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p $port root@127.0.0.1 /bin/sh 2>&1 | grep -v '^Warning: Permanently'
 }
 peer() {
-    kubectl -n macos exec -i $pod -- python3 - "$@" < $here/host-peer.py
+    kubectl -n ${NAMESPACE:?namespace of the pod} exec -i $pod -- python3 - "$@" < $here/host-peer.py
 }
 check() {
     if [ "$2" = 0 ]; then

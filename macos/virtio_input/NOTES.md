@@ -140,7 +140,7 @@ Each leaves `build/<ABI>/VirtioTablet.kext`. Both build without a warning. The l
 with the kext loaded:
 
     QEMU_EXTRA="-device virtio-tablet-pci" ladder/ladder.sh 10.2 start
-    python3 ladder/tablet_test.py --login 520,432,PASSWORD127.0.0.1:5912
+    python3 ladder/tablet_test.py --login 520,432,$GUEST_PASSWORD 127.0.0.1:5912
 
 It moves the pointer to five places and finds the cursor in the framebuffer (the pixels that
 changed around the target), and requires its tip within 3 pixels; then clicks the Apple menu open
@@ -148,7 +148,7 @@ and closes it. `--login X,Y,PASSWORD` first clicks the user in the login window'
 10.3) and logs in; `--login-fields NX,NY,PX,PY,USER,PASSWORD` does it with 10.0's name and password
 fields; `--no-menu` stops after the moves. Without the driver the cursor does not move at all
 ("nothing changed there"). The ladder's guests' users are at 534,403/534,428 (10.0), 540,431
-(10.1), 520,432 (10.2) and 547,425 (10.3), the guests' own password.
+(10.1), 520,432 (10.2) and 547,425 (10.3), with the guests' own password.
 
 ## Evidence
 

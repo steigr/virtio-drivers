@@ -5,7 +5,7 @@
 #   IRIS=path/to/iris irix/tests/boot-ip28.sh [workdir]
 #
 # IRIS            iris built from the virtio-serial branch (required)
-# IRIX_INSTANCE   the installed system (default $HOME/Developer/irix-ip28):
+# IRIX_INSTANCE   the installed system (required):
 #                 irix65.raw, ip28-nvram.bin, ip28-nveeprom.bin
 # VIRTIO_SLOT     GIO slot, exp0 (interrupts) or exp1 (polled: an Indigo2 kernel
 #                 dispatches no slot 1 interrupts).  Default exp0.
@@ -17,7 +17,7 @@
 # chosen not to collide with the instance's own ip28-*.toml configurations.
 set -eu
 : "${IRIS:?set IRIS to an iris binary built from the virtio-serial branch}"
-inst=${IRIX_INSTANCE:-$HOME/Developer/irix-ip28}
+inst=${IRIX_INSTANCE:?the installed system}
 slot=${VIRTIO_SLOT:-exp0}
 root=$(cd "$(dirname "$0")/../.." && pwd)
 work=${1:-$(mktemp -d "${TMPDIR:-/tmp}/virtio-iris.XXXXXX")}

@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-IRIX 6.5.22 kernel drivers for virtio devices, built towards the IRIS emulator's device models (checkout `irix/iris`, `$IRIS_SRC` for the tests, branch `feature/virtio-9p`, on top of `feature/virtio-serial-guest-device-412469`; its `docs/virtio-serial.md`, `docs/virtio-9p.md` and `src/dev/virtio/` are the contract). `README.md` covers status and use.
+IRIX 6.5.22 kernel drivers for virtio devices, built towards the IRIS emulator's device models (a checkout of `irix/iris` at `$IRIS_SRC`, branch `feature/virtio-9p`, on top of `feature/virtio-serial-guest-device-412469`; its `docs/virtio-serial.md`, `docs/virtio-9p.md` and `src/dev/virtio/` are the contract). `README.md` covers status and use.
 
 ## Commands
 
@@ -21,7 +21,7 @@ smake CPUBOARD=IP22       # compile-check another board: IP22 (n32), IP30 (n64)
 smake load ; smake unload
 ```
 
-End to end, against the installed system in `$HOME/Developer/irix-ip28`:
+End to end, against the installed system in `$IRIX_INSTANCE`:
 
 ```bash
 # Build iris from the branch, outside its checkout.

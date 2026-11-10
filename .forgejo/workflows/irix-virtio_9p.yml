@@ -2,8 +2,9 @@
 # IP30 and IP35, runs gendist and installs the package with inst. The runner then publishes it twice: as the
 # generic package irix_virtio_9p of this organisation (under its version and latest), and to the
 # update publisher (irix.the update publisher). Both authenticate with the job's ID token, so nothing secret is
-# configured: the registry through the Authorized Integration whose audience is the organisation variable
-# AUD (write:package), the publisher through its policy for this repository and workflow.
+# in the repository: the registry through the Authorized Integration whose audience is the organisation variable
+# AUD (write:package), the publisher through its policy for this repository and workflow. The publisher's
+# address (PUBLISHER_URL) and where the runner keeps the guest's ssh key (IRIS_SSH_DIR) are organisation variables.
 #
 # The version is an integer, as inst needs: the commit's UTC date and its number that day, such as 2026111001.
 name: irix/virtio_9p
@@ -12,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       runner:
-        description: "Runner label: irix = either machine, irix-runner or irix-runner = that one"
+        description: "Runner label: irix = any IRIX runner, or one runner's own label"
         required: false
         default: irix
   push:
@@ -38,6 +39,8 @@ jobs:
     runs-on: ${{ github.event.inputs.runner || 'irix' }}
     env:
       IRIX_TIMEOUT: 7200
+      IRIS_SSH_DIR: ${{ vars.IRIS_SSH_DIR }}
+      PUBLISHER_URL: ${{ vars.PUBLISHER_URL }}
     timeout-minutes: 60
     steps:
       - name: Fetch this repository
@@ -66,7 +69,7 @@ jobs:
           # Steps run over ssh (irix-sh) when the runner has the guest's key; else the console
           # needs a login first (after a pod restart it sits at a login prompt).
           for i in 1 2 3 4 5 6 7 8 9 10; do
-            if [ -r "${IRIS_SSH_DIR:-/run/iris/ssh}/id_ed25519" ]; then
+            if [ -r "$IRIS_SSH_DIR/id_ed25519" ]; then
               irix-ssh true && exit 0
             else
               iris-ci login && exit 0

@@ -16,7 +16,7 @@
 #   MINIMUM_SYSTEM_VERSION  sparkle:minimumSystemVersion
 #   APPCAST                 "false" for an app Sparkle does not update (an IRIX inst package): only the files are
 #                           published, with no appcast item and no signature
-#   PUBLISHER_URL           the service (default $PUBLISHER_URL)
+#   PUBLISHER_URL           the service (required; the organisation variable of the same name)
 #   PUBLISHER_AUDIENCE      the audience it accepts (default publisher)
 #
 # A release whose version is already in the appcast counts as published, so a re-run passes.
@@ -26,7 +26,7 @@ version=$2
 release=$3
 archive=$4
 shift 4
-url=${PUBLISHER_URL:-$PUBLISHER_URL}
+url=${PUBLISHER_URL:?the publisher service URL}
 audience=${PUBLISHER_AUDIENCE:-publisher}
 
 : "${ACTIONS_ID_TOKEN_REQUEST_URL:?the workflow needs enable-openid-connect: true}"

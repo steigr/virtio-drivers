@@ -19,7 +19,7 @@ import sys
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-# irix/iris, beside this repository: {virtualization/virtio-drivers,irix/iris}
+# IRIS_SRC, else a checkout of irix/iris beside this repository's parent directory
 IRIS_SRC = os.environ.get("IRIS_SRC", os.path.normpath(os.path.join(ROOT, "..", "..", "..", "irix", "iris")))
 IRIX_SH = os.path.join(IRIS_SRC, "tools", "irix-sh.py")
 TELNET_PORT = "12323"

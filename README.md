@@ -44,13 +44,25 @@ driver in its platform's guest, checks the package there, and publishes it twice
 
 - to this organisation's generic packages, as `<platform>_<driver>`
   ([list](virtualization/-/packages)), under its version and `latest`;
-- to the update publisher in the home cluster (namespace `update publisher`), which serves it at
+- to the update publisher, which serves it at
   `https://updates.$UPDATES_URL/<platform>_<driver>/`; the IRIX packages are listed on
   [irix.the update publisher](https://irix.$UPDATES_URL).
 
-Both uploads use the job's ID token, so the workflows need no secret: the registry accepts it
-through an Authorized Integration whose audience is the organisation variable `AUD`, the publisher
-through its policy for this repository and each workflow.
+Both uploads use the job's ID token: the registry accepts it through an Authorized Integration
+whose audience is the organisation variable `AUD`, the publisher through its policy for this
+repository and each workflow.
+
+Everything about the runners and the infrastructure is configured on the organisation, not here:
+
+| Name | Kind | What it is |
+| --- | --- | --- |
+| `AUD` | variable | audience of the Authorized Integration for package uploads |
+| `PUBLISHER_URL` | variable | the update publisher's URL, as the runners reach it |
+| `MACOS_GUEST_SSH` | variable | the Panther guest's ssh destination (`user@host`) |
+| `MACOS_SHARE_DIR` | variable | the directory shared with the guest, as the runner sees it |
+| `MACOS_GUEST_SHARE` | variable | the same directory, as the guest sees it |
+| `MACOS_GUEST_PASSWORD` | secret | the guest account's sudo password |
+| `IRIS_SSH_DIR` | variable | where the IRIX runner keeps the guest's ssh key |
 
 ## History
 

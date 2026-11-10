@@ -3,10 +3,11 @@
 # organisation's generic package registry (PACKAGE in macos/virtio_net/component.sh, as <VERSION>.<run number> and
 # latest), and to the update publisher (updates.the update publisher/<PACKAGE>/), which keeps no appcast for a kext.
 #
-# The runner is forgejo-runner/macos-panther: a host runner with ssh to the guest and the guest's
-# disk shared at /share. Both uploads authenticate with the job's ID token, so nothing secret is configured:
-# the registry through the Authorized Integration whose audience is the organisation variable AUD
-# (write:package), the publisher through its policy for this repository and workflow.
+# The runner is a host runner with ssh to the guest and a directory shared with it. Where those are, and the
+# publisher's address, come from organisation variables (MACOS_GUEST_SSH, MACOS_SHARE_DIR, MACOS_GUEST_SHARE,
+# PUBLISHER_URL); the guest's sudo password from the secret MACOS_GUEST_PASSWORD. Both uploads authenticate
+# with the job's ID token: the registry through the Authorized Integration whose audience is the organisation
+# variable AUD (write:package), the publisher through its policy for this repository and workflow.
 name: macos/virtio_net
 on:
   push:
@@ -22,6 +23,10 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  GUEST_SSH: ${{ vars.MACOS_GUEST_SSH }}
+  SHARE_DIR: ${{ vars.MACOS_SHARE_DIR }}
+  GUEST_SHARE: ${{ vars.MACOS_GUEST_SHARE }}
+  PUBLISHER_URL: ${{ vars.PUBLISHER_URL }}
   DRIVER: macos/virtio_net
 
 jobs:
@@ -51,6 +56,8 @@ jobs:
           ls -lR out | head -40
 
       - name: Package
+        env:
+          GUEST_PASSWORD: ${{ secrets.MACOS_GUEST_PASSWORD }}
         run: |
           . "src/$DRIVER/component.sh"
           export VERSION=$(cat version.txt)
@@ -69,11 +76,12 @@ jobs:
       - name: Check the packages in the guest
         run: |
           job=check-$$
-          mkdir -p /share/$job && chmod 777 /share/$job
-          cp dist/*.pkg.tar.gz src/macos/ci/check-pkg.sh "src/$DRIVER/component.sh" /share/$job/
-          chmod 644 /share/$job/*
+          mkdir -p "$SHARE_DIR/$job" && chmod 777 "$SHARE_DIR/$job"
+          cp dist/*.pkg.tar.gz src/macos/ci/check-pkg.sh "src/$DRIVER/component.sh" "$SHARE_DIR/$job/"
+          chmod 644 "$SHARE_DIR/$job"/*
+          g=$GUEST_SHARE/$job
           ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -o LogLevel=ERROR \
-            macos@127.0.0.1 "sh -c 'sh /Volumes/share/$job/check-pkg.sh /Volumes/share/$job 2>&1; rc=\$?; rm -rf /Volumes/share/$job; exit \$rc'"
+            "$GUEST_SSH" "sh -c 'sh $g/check-pkg.sh $g 2>&1; rc=\$?; rm -rf $g; exit \$rc'"
 
       - name: Publish to the package registry
         env:
