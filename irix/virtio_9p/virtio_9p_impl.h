@@ -1,27 +1,27 @@
 /*
  * What the parts of the 9P filesystem share.
  *
- * p9fs_dev.c owns the virtio device and carries 9P messages over it; p9.c is
- * the protocol; p9fs_vfs.c and p9fs_vnops.c are the filesystem.
+ * virtio_9p_dev.c owns the virtio device and carries 9P messages over it; p9.c is
+ * the protocol; virtio_9p_vfs.c and virtio_9p_vnops.c are the filesystem.
  */
-#ifndef _P9FS_IMPL_H_
-#define _P9FS_IMPL_H_
+#ifndef _VIRTIO_9P_IMPL_H_
+#define _VIRTIO_9P_IMPL_H_
 
 #include "p9.h"
 
 /* The name of the filesystem type, as mount and ml know it. */
-#define P9FS_NAME	"9p"
+#define VIRTIO_9P_NAME	"9p"
 
 /*
  * The block the buffer cache works in: one Tread or Twrite each, so it fits
  * in a message.  Large enough for any page size these machines have.
  */
-#define P9FS_BSIZE	32768
+#define VIRTIO_9P_BSIZE	32768
 
 /* Most data in one message, and the message's size. */
-#define P9FS_MSIZE	(65536 + P9_IOHDR)
+#define VIRTIO_9P_MSIZE	(65536 + P9_IOHDR)
 
-/* -------- the device, p9fs_dev.c -------- */
+/* -------- the device, virtio_9p_dev.c -------- */
 
 /* The device's client, or null with no device or before Tversion. */
 struct p9_client *p9dev_client(void);
@@ -36,7 +36,7 @@ int		p9dev_fini(void);
 
 /* -------- the filesystem -------- */
 
-#define P9FS_HASHSZ	257
+#define VIRTIO_9P_HASHSZ	257
 
 struct p9node;
 
@@ -45,7 +45,7 @@ struct p9mount {
 	struct vfs	*pm_vfs;
 	struct p9_client *pm_c;
 	mutex_t		*pm_hashlock;
-	struct p9node	*pm_hash[P9FS_HASHSZ];
+	struct p9node	*pm_hash[VIRTIO_9P_HASHSZ];
 	struct p9node	*pm_root;
 	p9_u32		pm_rootfid;
 	int		pm_owners;	/* "owners" mount option: ids go to the host */
@@ -96,9 +96,9 @@ struct p9node {
 #define PN_CLIENT(pn)	((pn)->pn_mnt->pm_c)
 #define PN_OWNERS(pn)	((pn)->pn_mnt->pm_owners)
 
-extern vnodeops_t	p9fs_vnodeops;
-extern vfsops_t		p9fs_vfsops;
-extern int		p9fs_fstype;
+extern vnodeops_t	virtio_9p_vnodeops;
+extern vfsops_t		virtio_9p_vfsops;
+extern int		virtio_9p_fstype;
 
 /*
  * The node for what fid names, with a hold on its vnode.  Takes over fid: the
@@ -107,6 +107,6 @@ extern int		p9fs_fstype;
 int	p9node_get(struct p9mount *pm, p9_u32 fid, const struct p9_attr *a,
 		   struct p9node **pnp);
 /* Push what the buffer cache holds for every file, and wait if asked. */
-void	p9fs_sync_all(struct p9mount *pm, int wait);
+void	virtio_9p_sync_all(struct p9mount *pm, int wait);
 
-#endif /* _P9FS_IMPL_H_ */
+#endif /* _VIRTIO_9P_IMPL_H_ */

@@ -307,7 +307,7 @@ virtio_pci_attach(vertex_hdl_t conn)
  * The functions are found by walking the hwgraph for the vertices whose PCI
  * info names the device (pciio_info_chk is 0 on any other vertex), not with
  * pciio_driver_register: the attach call that makes needs the driver's devsw,
- * which p9fs, a filesystem (ml ld -j), has none of, and vioser has only once
+ * which virtio_9p, a filesystem (ml ld -j), has none of, and virtio_serial has only once
  * its init has returned (on IRIX 6.5.30 the kernel faults on the missing one).
  * The walk takes real edges only, skips hidden ones (".master" leads back up),
  * and stops after SCAN_BUDGET edges; a function reached again through an

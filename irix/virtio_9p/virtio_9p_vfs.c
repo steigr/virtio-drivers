@@ -1,7 +1,7 @@
 /*
  * A 9P2000.L filesystem over virtio-9p, for IRIX 6.5: the mount and the module.
  *
- * Load with ml ld -j p9fs.o -p p9fs_ -a 9p.  mount(2) takes the device's tag as
+ * Load with ml ld -j virtio_9p.o -p virtio_9p_ -a 9p.  mount(2) takes the device's tag as
  * the special file and, in its data, "aname=dir" to mount a directory under the
  * share rather than the top of it.
  *
@@ -31,13 +31,13 @@
 #include <sys/vfs.h>
 #include <sys/vnode.h>
 
-#include "p9fs_impl.h"
+#include "virtio_9p_impl.h"
 
-char	*p9fs_mversion = M_VERSION;
-int	p9fs_fstype;
+char	*virtio_9p_mversion = M_VERSION;
+int	virtio_9p_fstype;
 
-static int p9fs_major;
-static unsigned int p9fs_minor;
+static int virtio_9p_major;
+static unsigned int virtio_9p_minor;
 
 #define OPTS_MAX	256
 #define SPEC_MAX	80
@@ -85,7 +85,7 @@ opt_get(const char *opts, const char *name, char *val, size_t cap)
 
 /*ARGSUSED*/
 static int
-p9fs_mount(struct vfs *vfsp, struct vnode *mvp, struct mounta *uap, char *attrs,
+virtio_9p_mount(struct vfs *vfsp, struct vnode *mvp, struct mounta *uap, char *attrs,
 	   struct cred *cr)
 {
 	struct p9_client *c;
@@ -132,12 +132,12 @@ p9fs_mount(struct vfs *vfsp, struct vnode *mvp, struct mounta *uap, char *attrs,
 	if ((err = p9_getattr(c, pm->pm_rootfid, &a)) != 0)
 		goto fail_clunk;
 
-	vfs_insertbhv(vfsp, &pm->pm_bhv, &p9fs_vfsops, pm);
-	vfsp->vfs_bsize = P9FS_BSIZE;
-	vfsp->vfs_fstype = p9fs_fstype;
-	vfsp->vfs_dev = makedevice(p9fs_major, atomicAddUint(&p9fs_minor, 1) & 0x3ffff);
+	vfs_insertbhv(vfsp, &pm->pm_bhv, &virtio_9p_vfsops, pm);
+	vfsp->vfs_bsize = VIRTIO_9P_BSIZE;
+	vfsp->vfs_fstype = virtio_9p_fstype;
+	vfsp->vfs_dev = makedevice(virtio_9p_major, atomicAddUint(&virtio_9p_minor, 1) & 0x3ffff);
 	vfsp->vfs_fsid.val[0] = vfsp->vfs_dev;
-	vfsp->vfs_fsid.val[1] = p9fs_fstype;
+	vfsp->vfs_fsid.val[1] = virtio_9p_fstype;
 
 	/* The root keeps a fid of its own, so the attach fid stays for statfs. */
 	{
@@ -169,7 +169,7 @@ out:
 
 /*ARGSUSED*/
 static int
-p9fs_unmount(bhv_desc_t *bdp, int flags, struct cred *cr)
+virtio_9p_unmount(bhv_desc_t *bdp, int flags, struct cred *cr)
 {
 	struct p9mount *pm = BHV_TO_PM(bdp);
 	struct vfs *vfsp = pm->pm_vfs;
@@ -180,7 +180,7 @@ p9fs_unmount(bhv_desc_t *bdp, int flags, struct cred *cr)
 
 	if (!_CAP_CRABLE(cr, CAP_MOUNT_MGT))
 		return EPERM;
-	p9fs_sync_all(pm, 1);
+	virtio_9p_sync_all(pm, 1);
 
 	/* Busy if anything but the mount's own hold on the root is in use. */
 	MUTEX_LOCK(pm->pm_hashlock, -1);
@@ -188,7 +188,7 @@ p9fs_unmount(bhv_desc_t *bdp, int flags, struct cred *cr)
 		MUTEX_UNLOCK(pm->pm_hashlock);
 		return EBUSY;
 	}
-	for (i = 0; i < P9FS_HASHSZ; i++) {
+	for (i = 0; i < VIRTIO_9P_HASHSZ; i++) {
 		for (pn = pm->pm_hash[i]; pn != 0; pn = pn->pn_hnext) {
 			if (pn != pm->pm_root && pn->pn_vp->v_count != 0) {
 				MUTEX_UNLOCK(pm->pm_hashlock);
@@ -197,7 +197,7 @@ p9fs_unmount(bhv_desc_t *bdp, int flags, struct cred *cr)
 		}
 	}
 	/* VOP_RECLAIM takes the node off the chain, so start over each time. */
-	for (i = 0; i < P9FS_HASHSZ; i++) {
+	for (i = 0; i < VIRTIO_9P_HASHSZ; i++) {
 		while ((pn = pm->pm_hash[i]) != 0) {
 			if (pn == pm->pm_root) {
 				pn = pn->pn_hnext;
@@ -224,7 +224,7 @@ p9fs_unmount(bhv_desc_t *bdp, int flags, struct cred *cr)
 }
 
 static int
-p9fs_root(bhv_desc_t *bdp, struct vnode **vpp)
+virtio_9p_root(bhv_desc_t *bdp, struct vnode **vpp)
 {
 	vnode_t *vp = BHV_TO_PM(bdp)->pm_root->pn_vp;
 
@@ -235,7 +235,7 @@ p9fs_root(bhv_desc_t *bdp, struct vnode **vpp)
 
 /*ARGSUSED*/
 static int
-p9fs_statvfs(bhv_desc_t *bdp, struct statvfs *sp, struct vnode *vp)
+virtio_9p_statvfs(bhv_desc_t *bdp, struct statvfs *sp, struct vnode *vp)
 {
 	struct p9mount *pm = BHV_TO_PM(bdp);
 	struct vfs *vfsp = pm->pm_vfs;
@@ -245,7 +245,7 @@ p9fs_statvfs(bhv_desc_t *bdp, struct statvfs *sp, struct vnode *vp)
 	if ((err = p9_statfs(pm->pm_c, pm->pm_rootfid, &st)) != 0)
 		return err;
 	bzero(sp, sizeof(*sp));
-	sp->f_bsize = P9FS_BSIZE;
+	sp->f_bsize = VIRTIO_9P_BSIZE;
 	sp->f_frsize = st.bsize;
 	sp->f_blocks = (fsblkcnt_t)st.blocks;
 	sp->f_bfree = (fsblkcnt_t)st.bfree;
@@ -254,7 +254,7 @@ p9fs_statvfs(bhv_desc_t *bdp, struct statvfs *sp, struct vnode *vp)
 	sp->f_ffree = (fsfilcnt_t)st.ffree;
 	sp->f_favail = (fsfilcnt_t)st.ffree;
 	sp->f_fsid = vfsp->vfs_dev;
-	strcpy(sp->f_basetype, P9FS_NAME);
+	strcpy(sp->f_basetype, VIRTIO_9P_NAME);
 	sp->f_flag = vf_to_stf(vfsp->vfs_flag);
 	sp->f_namemax = st.namelen != 0 ? st.namelen : 255;
 	return 0;
@@ -262,27 +262,27 @@ p9fs_statvfs(bhv_desc_t *bdp, struct statvfs *sp, struct vnode *vp)
 
 /*ARGSUSED*/
 static int
-p9fs_sync(bhv_desc_t *bdp, int flags, struct cred *cr)
+virtio_9p_sync(bhv_desc_t *bdp, int flags, struct cred *cr)
 {
 	/* bdflush pushes old buffers by itself and must not block here. */
 	if (flags & SYNC_BDFLUSH)
 		return 0;
 	if (flags & (SYNC_DELWRI | SYNC_CLOSE | SYNC_WAIT | SYNC_PDFLUSH))
-		p9fs_sync_all(BHV_TO_PM(bdp), (flags & (SYNC_WAIT | SYNC_CLOSE)) != 0);
+		virtio_9p_sync_all(BHV_TO_PM(bdp), (flags & (SYNC_WAIT | SYNC_CLOSE)) != 0);
 	return 0;
 }
 
-vfsops_t p9fs_vfsops = {
+vfsops_t virtio_9p_vfsops = {
 	BHV_IDENTITY_INIT_POSITION(VFS_POSITION_BASE),
-	p9fs_mount,
+	virtio_9p_mount,
 	(int (*)(struct vfs *))fs_nosys,			/* rootinit */
 	(int (*)(bhv_desc_t *, struct vnode *, struct mounta *,
 	    struct cred *))fs_nosys,				/* mntupdate */
 	fs_dounmount,
-	p9fs_unmount,
-	p9fs_root,
-	p9fs_statvfs,
-	p9fs_sync,
+	virtio_9p_unmount,
+	virtio_9p_root,
+	virtio_9p_statvfs,
+	virtio_9p_sync,
 	(int (*)(bhv_desc_t *, struct vnode **, struct fid *))fs_nosys, /* vget */
 	(int (*)(bhv_desc_t *, enum whymountroot))fs_nosys,	/* mountroot */
 	fs_realvfsops,
@@ -297,12 +297,12 @@ vfsops_t p9fs_vfsops = {
 
 /*ARGSUSED*/
 int
-p9fs_init(struct vfssw *vswp, int fstype)
+virtio_9p_init(struct vfssw *vswp, int fstype)
 {
 	int err;
 
-	p9fs_fstype = fstype;
-	p9fs_major = getudev();
+	virtio_9p_fstype = fstype;
+	virtio_9p_major = getudev();
 	/* With no device the type exists and mounting it says so. */
 	if ((err = p9dev_init()) != 0 && err != ENODEV)
 		cmn_err(CE_WARN, "9p: attach failed, error %d", err);
@@ -310,7 +310,7 @@ p9fs_init(struct vfssw *vswp, int fstype)
 }
 
 int
-p9fs_unload(void)
+virtio_9p_unload(void)
 {
 	return p9dev_fini();
 }

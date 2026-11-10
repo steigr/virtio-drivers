@@ -22,7 +22,7 @@ IRIX_SH = os.path.join(IRIS_SRC, "tools", "irix-sh.py")
 TELNET_PORT = "12323"
 CONSOLE_TCP = 18890
 AGENT_SOCK = "agent.sock"
-MODULE = "/tmp/vioser.IP28/mod/vioser.o"
+MODULE = "/tmp/virtio_serial.IP28/mod/virtio_serial.o"
 VSTEST = "/tmp/vstest"
 
 AGENT = "/hw/virtio-ports/org.iris.agent.0"
@@ -92,7 +92,7 @@ def build():
     rc, out = guest(
         # The image's rc script only retries the mount in the background.
         "/sbin/mount | grep -q ' on /share ' || /sbin/mount /share",
-        "rm -rf /tmp/vioser.IP28 /tmp/vstest",
+        "rm -rf /tmp/virtio_serial.IP28 /tmp/vstest",
         "cd /share/driver && smake 2>&1 | tail -20",
         "cd /share/tests/guest && cc -n32 -I/share/driver -o /tmp/vstest vstest.c 2>&1",
         f"ls -l {MODULE} {VSTEST}",
@@ -102,14 +102,14 @@ def build():
 
 
 def load():
-    rc, out = guest(f"/sbin/ml ld -v -c {MODULE} -p vioser_", "ls /hw/virtio-serial /hw/virtio-ports")
+    rc, out = guest(f"/sbin/ml ld -v -c {MODULE} -p virtio_serial_", "ls /hw/virtio-serial /hw/virtio-ports")
     ok = rc == 0 and "org.iris.agent.0" in out and "port2" in out
     check("load module, ports appear in /hw", ok, out)
     return ok
 
 
 def unload():
-    rc, out = guest("id=`/sbin/ml list -l | awk '/vioser/ {print $2}'`", "/sbin/ml unld $id", "ls /hw/virtio-serial")
+    rc, out = guest("id=`/sbin/ml list -l | awk '/virtio_serial/ {print $2}'`", "/sbin/ml unld $id", "ls /hw/virtio-serial")
     check("unload module, ports gone", rc != 0 or "port" not in out.replace("virtio-serial", ""), out)
 
 

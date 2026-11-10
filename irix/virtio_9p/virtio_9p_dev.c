@@ -11,7 +11,7 @@
  * and replies are collected by polling: briefly straight after a request, which
  * catches nearly all of them, then from a timeout.
  *
- * Cache: as for vioser, buffers stay cached.  A message is written back before
+ * Cache: as for virtio_serial, buffers stay cached.  A message is written back before
  * the device reads it, and the reply buffer is invalidated both when handed
  * over and when it comes back.
  */
@@ -29,7 +29,7 @@
 #include <sys/vfs.h>
 #include <sys/vnode.h>
 
-#include "p9fs_impl.h"
+#include "virtio_9p_impl.h"
 #include "virtio_bus.h"
 #include "virtq.h"
 
@@ -154,12 +154,12 @@ pd_rpc(void *ctx, struct p9_req *pr, p9_u32 txlen)
 	int s, spins;
 
 	dki_dcache_wb(pr->tx, (int)txlen);
-	dki_dcache_inval(pr->rx, P9FS_MSIZE);
+	dki_dcache_inval(pr->rx, VIRTIO_9P_MSIZE);
 	segs[0].addr = r->pr_txbus;
 	segs[0].len = txlen;
 	segs[0].device_writes = 0;
 	segs[1].addr = r->pr_rxbus;
-	segs[1].len = P9FS_MSIZE;
+	segs[1].len = VIRTIO_9P_MSIZE;
 	segs[1].device_writes = 1;
 
 	s = LOCK(pd->pd_lock, plhi);
@@ -184,8 +184,8 @@ pd_rpc(void *ctx, struct p9_req *pr, p9_u32 txlen)
 	}
 	UNLOCK(pd->pd_lock, s);
 
-	dki_dcache_inval(pr->rx, P9FS_MSIZE);
-	return pr->rxlen <= P9FS_MSIZE ? 0 : EIO;
+	dki_dcache_inval(pr->rx, VIRTIO_9P_MSIZE);
+	return pr->rxlen <= VIRTIO_9P_MSIZE ? 0 : EIO;
 }
 
 static const struct p9_transport pd_transport = { pd_get, pd_rpc, pd_put };
@@ -240,9 +240,9 @@ pd_teardown(struct p9dev *pd)
 		struct pd_req *r = &pd->pd_reqs[i];
 
 		if (r->pr_r.tx != 0)
-			kmem_free(r->pr_r.tx, P9FS_MSIZE);
+			kmem_free(r->pr_r.tx, VIRTIO_9P_MSIZE);
 		if (r->pr_r.rx != 0)
-			kmem_free(r->pr_r.rx, P9FS_MSIZE);
+			kmem_free(r->pr_r.rx, VIRTIO_9P_MSIZE);
 		if (r->pr_sv != 0)
 			SV_DEALLOC(r->pr_sv);
 	}
@@ -331,13 +331,13 @@ pd_attach(const struct virtio_bus_ops *ops, void *bus, void **scp)
 	for (i = 0; i < PD_NREQ; i++) {
 		struct pd_req *r = &pd->pd_reqs[i];
 
-		r->pr_r.tx = kmem_alloc(P9FS_MSIZE, KM_SLEEP | KM_PHYSCONTIG |
+		r->pr_r.tx = kmem_alloc(VIRTIO_9P_MSIZE, KM_SLEEP | KM_PHYSCONTIG |
 		    KM_CACHEALIGN);
-		r->pr_r.rx = kmem_alloc(P9FS_MSIZE, KM_SLEEP | KM_PHYSCONTIG |
+		r->pr_r.rx = kmem_alloc(VIRTIO_9P_MSIZE, KM_SLEEP | KM_PHYSCONTIG |
 		    KM_CACHEALIGN);
 		r->pr_r.tag = (p9_u16)i;
-		r->pr_txbus = ops->dma_addr(bus, r->pr_r.tx, P9FS_MSIZE);
-		r->pr_rxbus = ops->dma_addr(bus, r->pr_r.rx, P9FS_MSIZE);
+		r->pr_txbus = ops->dma_addr(bus, r->pr_r.tx, VIRTIO_9P_MSIZE);
+		r->pr_rxbus = ops->dma_addr(bus, r->pr_r.rx, VIRTIO_9P_MSIZE);
 		r->pr_sv = SV_ALLOC(SV_DEFAULT, KM_SLEEP, "p9req");
 		r->pr_next = pd->pd_free;
 		pd->pd_free = r;
@@ -363,7 +363,7 @@ pd_attach(const struct virtio_bus_ops *ops, void *bus, void **scp)
 
 	pd->pd_client.trans = &pd_transport;
 	pd->pd_client.ctx = pd;
-	pd->pd_client.msize = P9FS_MSIZE;
+	pd->pd_client.msize = VIRTIO_9P_MSIZE;
 	if ((err = p9_version(&pd->pd_client)) != 0) {
 		cmn_err(CE_WARN, "9p: the device refused %s: error %d",
 		    P9_DIALECT, err);
@@ -438,11 +438,11 @@ p9dev_rele(void)
 int
 p9dev_init(void)
 {
-	return virtio_bus_init(&pd_driver, "p9fs_");
+	return virtio_bus_init(&pd_driver, "virtio_9p_");
 }
 
 int
 p9dev_fini(void)
 {
-	return virtio_bus_fini("p9fs_");
+	return virtio_bus_fini("virtio_9p_");
 }

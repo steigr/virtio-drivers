@@ -3,11 +3,11 @@
 # again. Nothing is loaded: a build node should not run a driver under test, and
 # may not have the device.
 #
-# p9fs is not removed: the CI steps run on the 9p share (/share), and without the package the
+# virtio_9p is not removed: the CI steps run on the 9p share (/share), and without the package the
 # guest cannot mount it again ("unknown filesystem type: 9p"), so the next job would fail. It
 # stays installed as the newer version; the module that is loaded now keeps running.
 #
-#   test-package.sh <vioser|p9fs> <tardist>
+#   test-package.sh <virtio_serial|virtio_9p> <tardist>
 product=$1
 tardist=$2
 log=/var/tmp/$product-inst-$$.log
@@ -16,22 +16,22 @@ remove() { /usr/sbin/inst -a -R $product > $log 2>&1; }
 
 # The module, a symbol ml needs from it, and everything else the package installs.
 case "$product" in
-vioser)
-	obj=/usr/lib/vioser/vioser.o; sym=vioser_init
-	files="/etc/init.d/vioser"
-	links="/etc/rc2.d/S98vioser /etc/rc0.d/K02vioser"
+virtio_serial)
+	obj=/usr/lib/virtio_serial/virtio_serial.o; sym=virtio_serial_init
+	files="/etc/init.d/virtio_serial"
+	links="/etc/rc2.d/S98virtio_serial /etc/rc0.d/K02virtio_serial"
 	;;
-p9fs)
-	obj=/usr/lib/p9fs/p9fs.o; sym=p9fs_vfsops
-	files="/etc/init.d/p9fs /usr/etc/mount_9p"
-	links="/etc/rc2.d/S98p9fs /etc/rc0.d/K02p9fs"
+virtio_9p)
+	obj=/usr/lib/virtio_9p/virtio_9p.o; sym=virtio_9p_vfsops
+	files="/etc/init.d/virtio_9p /usr/etc/mount_9p"
+	links="/etc/rc2.d/S98virtio_9p /etc/rc0.d/K02virtio_9p"
 	keep=1
 	;;
 *)
-	echo "usage: $0 <vioser|p9fs> <tardist>"; exit 2
+	echo "usage: $0 <virtio_serial|virtio_9p> <tardist>"; exit 2
 	;;
 esac
-[ -f "$tardist" ] || { echo "usage: $0 <vioser|p9fs> <tardist>"; exit 2; }
+[ -f "$tardist" ] || { echo "usage: $0 <virtio_serial|virtio_9p> <tardist>"; exit 2; }
 libdir=`dirname $obj`
 
 if [ -n "${keep:-}" ]; then trap 'rm -f $log' 0; else trap 'cd /; remove; rm -f $log' 0; fi

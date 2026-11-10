@@ -22,8 +22,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 IRIS_SRC = os.environ.get("IRIS_SRC", os.path.join(os.path.dirname(ROOT), "iris"))
 IRIX_SH = os.path.join(IRIS_SRC, "tools", "irix-sh.py")
 TELNET_PORT = "12323"
-MODULE = "/tmp/vioser.IP28/mod/p9fs.o"
-MOUNT_9P = "/tmp/vioser.IP28/mount_9p"
+MODULE = "/tmp/virtio_serial.IP28/mod/virtio_9p.o"
+MOUNT_9P = "/tmp/virtio_serial.IP28/mount_9p"
 MNT = "/mnt9p"
 TEST = "/tmp/p9test"
 
@@ -49,7 +49,7 @@ def check(name, ok, detail=""):
 def build():
     rc, out = guest(
         "/sbin/mount | grep -q ' on /share ' || /sbin/mount /share",
-        "rm -rf /tmp/vioser.IP28 /tmp/p9test*",
+        "rm -rf /tmp/virtio_serial.IP28 /tmp/p9test*",
         "cd /share/driver && smake > /tmp/9b.log 2>&1; tail -3 /tmp/9b.log",
         "cd /share/tests/guest; for a in n32 64 32; do cc -$a -o /tmp/p9test.$a p9test.c 2>&1; done",
         f"cp /tmp/p9test.n32 {TEST}",
@@ -61,13 +61,13 @@ def build():
 
 
 def load():
-    rc, out = guest(f"/sbin/ml ld -v -j {MODULE} -p p9fs_ -a 9p", "/sbin/ml list -l | grep p9fs")
+    rc, out = guest(f"/sbin/ml ld -v -j {MODULE} -p virtio_9p_ -a 9p", "/sbin/ml list -l | grep virtio_9p")
     check("load module", rc == 0 and "File system" in out, out)
     return rc == 0
 
 
 def unload():
-    rc, out = guest("id=`/sbin/ml list -l | awk '/p9fs/ {print $2}'`", "/sbin/ml unld $id", "/sbin/ml list -l | grep -c p9fs")
+    rc, out = guest("id=`/sbin/ml list -l | awk '/virtio_9p/ {print $2}'`", "/sbin/ml unld $id", "/sbin/ml list -l | grep -c virtio_9p")
     check("unload module", "0" in out.split(), out)
 
 
@@ -223,10 +223,10 @@ def test_exec_and_build(share):
     check("compile on the share and exec the result", "ran from 9p" in out, out)
     # Compiling is what stresses it: many small files, seeks, and ld's mmap.
     rc, out = guest(f"cd {MNT}/src && smake OBJDIR={MNT}/src/obj > /tmp/9sb.log 2>&1; echo rc=$?; tail -3 /tmp/9sb.log",
-                    f"ls -l {MNT}/src/obj/mod/p9fs.o", timeout=900)
-    check("smake of this driver on the share", "rc=0" in out and "p9fs.o" in out, out)
-    if os.path.exists(os.path.join(dest, "obj", "mod", "p9fs.o")):
-        check("the object is on the host", os.path.getsize(os.path.join(dest, "obj", "mod", "p9fs.o")) > 10000)
+                    f"ls -l {MNT}/src/obj/mod/virtio_9p.o", timeout=900)
+    check("smake of this driver on the share", "rc=0" in out and "virtio_9p.o" in out, out)
+    if os.path.exists(os.path.join(dest, "obj", "mod", "virtio_9p.o")):
+        check("the object is on the host", os.path.getsize(os.path.join(dest, "obj", "mod", "virtio_9p.o")) > 10000)
     rc, out = guest(f"cd {MNT} && tar cf /tmp/s.tar src && mkdir tx && cd tx && tar xf /tmp/s.tar && cd .. && diff -r src tx/src && echo identical",
                     timeout=600)
     check("tar out and back", "identical" in out, out)

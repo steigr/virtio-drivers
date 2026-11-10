@@ -3,9 +3,9 @@
 Drivers that let IRIX 6.5.22 use virtio devices under the
 [IRIS](irix/iris) emulator:
 
-- **vioser**, for virtio-serial: named, 8-bit-clean byte channels between the guest
+- **virtio_serial**, for virtio-serial: named, 8-bit-clean byte channels between the guest
   and the host, with no UART, network or disk involved.
-- **p9fs**, for virtio-9p: a filesystem that mounts a directory on the host, with
+- **virtio_9p**, for virtio-9p: a filesystem that mounts a directory on the host, with
   no network or NFS involved. Programs run from it and `mmap` works, which the NFS
   `/share` does not manage.
 
@@ -20,24 +20,24 @@ The device side is IRIS's `feature/virtio-9p` branch, on top of
 | Indigo2 IMPACT (IP28) | virtio-mmio on GIO | Runs: tested end to end under IRIS |
 | Indigo2 (IP22), Indy (IP24) | virtio-mmio on GIO | Compiles; never run |
 | Octane (IP30) | virtio-pci on the Bridge | Compiles; never run |
-| Tezro (IP35, IRIX 6.5.30) | virtio-pci on bus 1 of the IO9 PIC | Runs under IRIS: vioser's ports and a 9p mount, modules built on the IP28 (6.5.22 headers) |
+| Tezro (IP35, IRIX 6.5.30) | virtio-pci on bus 1 of the IO9 PIC | Runs under IRIS: virtio_serial's ports and a 9p mount, modules built on the IP28 (6.5.22 headers) |
 | O2 (IP32) | | Not supported: IRIS does not wire the device there |
 
 ## Using it
 
 The easy way is the inst packages, one for each driver, from the `irix`
 organisation's packages:
-[`vioser`](irix/-/packages/generic/vioser/latest) and
-[`p9fs`](irix/-/packages/generic/p9fs/latest).
+[`virtio_serial`](irix/-/packages/generic/virtio_serial/latest) and
+[`virtio_9p`](irix/-/packages/generic/virtio_9p/latest).
 
 ```sh
-inst -f vioser-latest.tardist     # installs the module for this board
-/etc/init.d/vioser start          # or reboot: it loads at every boot
-inst -f p9fs-latest.tardist       # the same, and mount_9p
-/etc/init.d/p9fs start
+inst -f virtio_serial-latest.tardist     # installs the module for this board
+/etc/init.d/virtio_serial start          # or reboot: it loads at every boot
+inst -f virtio_9p-latest.tardist       # the same, and mount_9p
+/etc/init.d/virtio_9p start
 ```
 
-The `dev` image of `vioser`, not selected by default, adds `sys/vioser.h`. Removing
+The `dev` image of `virtio_serial`, not selected by default, adds `sys/virtio_serial.h`. Removing
 a package leaves a loaded module in the kernel until the next reboot. With no
 device present a module loads and stays idle.
 
@@ -46,8 +46,8 @@ installed:
 
 ```sh
 cd driver
-smake            # builds /tmp/vioser.<board>/mod/{vioser,p9fs}.o and mount_9p
-smake load       # ml ld of vioser; smake load9p of the filesystem
+smake            # builds /tmp/virtio_serial.<board>/mod/{virtio_serial,virtio_9p}.o and mount_9p
+smake load       # ml ld of virtio_serial; smake load9p of the filesystem
 smake unload     # ml unld; smake unload9p
 smake install    # load both at every boot; smake uninstall undoes it
 ```
@@ -62,8 +62,8 @@ Each port is a character device:
 /dev/virtio-ports                  a link to the above, after smake install
 ```
 
-`read`, `write`, `poll`, `FIONREAD` and `VIOSER_GETINFO` (see
-[driver/vioser.h](driver/vioser.h)) work as you would expect of a pipe. One
+`read`, `write`, `poll`, `FIONREAD` and `VIRTIO_SERIAL_GETINFO` (see
+[driver/virtio_serial.h](driver/virtio_serial.h)) work as you would expect of a pipe. One
 program can have a port open at a time. `read` returns end of file while no
 program is connected to the host end, and what the guest writes then is dropped
 by the device. A port is not a tty, so `getty` cannot run on one.
@@ -87,14 +87,14 @@ socket = "/tmp/iris-agent.sock"
 ### virtio-9p
 
 ```sh
-ml ld -j /usr/lib/p9fs/p9fs.o -p p9fs_ -a 9p     # what /etc/init.d/p9fs does
+ml ld -j /usr/lib/virtio_9p/virtio_9p.o -p virtio_9p_ -a 9p     # what /etc/init.d/virtio_9p does
 mount -t 9p share /mnt/host                      # the first word is the device's tag
 mount -t 9p -o aname=some/dir,ro share /mnt/host # a directory of it, read-only
 mount -t 9p -o owners share /mnt/host            # the guest's user and group go to the host
 umount /mnt/host
 ```
 
-or in `/etc/fstab`, which `/etc/init.d/p9fs` mounts at boot:
+or in `/etc/fstab`, which `/etc/init.d/virtio_9p` mounts at boot:
 
 ```
 share /mnt/host 9p rw 0 0
@@ -163,7 +163,7 @@ See [CLAUDE.md](CLAUDE.md) for how to run them.
 `main` that touches the driver or the packaging, and on demand. On the `irix`
 runner, the IRIX guest compiles both modules for each of IP22, IP28, IP30 and IP35 and runs
 `gendist`, then installs and removes each package with `inst`. The runner uploads
-them as the generic packages `vioser` and `p9fs`, each under its version and
+them as the generic packages `virtio_serial` and `virtio_9p`, each under its version and
 `latest`, with the organisation secret `PACKAGES_TOKEN`.
 
 The version is an integer, as inst needs: the commit's UTC date and its number

@@ -8,22 +8,22 @@
  * write() blocks for a free buffer.  poll() reports POLLIN, POLLOUT and POLLHUP.
  * Bytes pass through untouched: a port is not a tty.
  */
-#ifndef _VIOSER_H_
-#define _VIOSER_H_
+#ifndef _VIRTIO_SERIAL_H_
+#define _VIRTIO_SERIAL_H_
 
 #include <sys/ioctl.h>
 
-#define VIOSER_NAME_MAX		64
+#define VIRTIO_SERIAL_NAME_MAX		64
 
-#define VIOSER_F_CONSOLE	0x1	/* the device calls this port its console */
-#define VIOSER_F_HOST_OPEN	0x2	/* a program is connected to the host end */
+#define VIRTIO_SERIAL_F_CONSOLE	0x1	/* the device calls this port its console */
+#define VIRTIO_SERIAL_F_HOST_OPEN	0x2	/* a program is connected to the host end */
 
-struct vioser_info {
+struct virtio_serial_info {
 	unsigned int	vi_port;
 	unsigned int	vi_flags;
-	char		vi_name[VIOSER_NAME_MAX];	/* "" for an unnamed port */
+	char		vi_name[VIRTIO_SERIAL_NAME_MAX];	/* "" for an unnamed port */
 };
 
-#define VIOSER_GETINFO	_IOR('V', 1, struct vioser_info)
+#define VIRTIO_SERIAL_GETINFO	_IOR('V', 1, struct virtio_serial_info)
 
-#endif /* _VIOSER_H_ */
+#endif /* _VIRTIO_SERIAL_H_ */

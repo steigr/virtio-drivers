@@ -42,11 +42,11 @@
 #include <sys/vfs.h>
 #include <sys/vnode.h>
 
-#include "p9fs_impl.h"
+#include "virtio_9p_impl.h"
 
 extern time_t lbolt;
 
-static int	p9fs_getattr(bhv_desc_t *, struct vattr *, int, struct cred *);
+static int	virtio_9p_getattr(bhv_desc_t *, struct vattr *, int, struct cred *);
 
 /*
  * A page operation's whole file, inclusive, as vn_reclaim itself asks for it.
@@ -92,7 +92,7 @@ pn_find_locked(struct p9mount *pm, p9_u64 path)
 {
 	struct p9node *pn;
 
-	for (pn = pm->pm_hash[path % P9FS_HASHSZ]; pn != 0; pn = pn->pn_hnext) {
+	for (pn = pm->pm_hash[path % VIRTIO_9P_HASHSZ]; pn != 0; pn = pn->pn_hnext) {
 		if (pn->pn_path == path)
 			return pn;
 	}
@@ -195,12 +195,12 @@ p9node_get(struct p9mount *pm, p9_u32 fid, const struct p9_attr *a,
 		fresh->pn_attrtime = (unsigned long)lbolt;
 		vp = vn_alloc(pm->pm_vfs, mode_to_vtype(a->mode), 0);
 		fresh->pn_vp = vp;
-		bhv_desc_init(&fresh->pn_bhv, fresh, vp, &p9fs_vnodeops);
+		bhv_desc_init(&fresh->pn_bhv, fresh, vp, &virtio_9p_vnodeops);
 		vn_bhv_insert_initial(VN_BHV_HEAD(vp), &fresh->pn_bhv);
 	}
 	pn = fresh;
-	pn->pn_hnext = pm->pm_hash[pn->pn_path % P9FS_HASHSZ];
-	pm->pm_hash[pn->pn_path % P9FS_HASHSZ] = pn;
+	pn->pn_hnext = pm->pm_hash[pn->pn_path % VIRTIO_9P_HASHSZ];
+	pm->pm_hash[pn->pn_path % VIRTIO_9P_HASHSZ] = pn;
 	MUTEX_UNLOCK(pm->pm_hashlock);
 	*pnp = pn;
 	return 0;
@@ -449,7 +449,7 @@ pn_dir_changed(struct p9node *dpn)
 
 /*ARGSUSED*/
 static int
-p9fs_open(bhv_desc_t *bdp, vnode_t **vpp, mode_t mode, struct cred *cr)
+virtio_9p_open(bhv_desc_t *bdp, vnode_t **vpp, mode_t mode, struct cred *cr)
 {
 	struct p9node *pn = BHV_TO_PN(bdp);
 	vnode_t *vp = pn->pn_vp;
@@ -482,7 +482,7 @@ p9fs_open(bhv_desc_t *bdp, vnode_t **vpp, mode_t mode, struct cred *cr)
 
 /*ARGSUSED*/
 static int
-p9fs_close(bhv_desc_t *bdp, int flags, lastclose_t lastclose, struct cred *cr)
+virtio_9p_close(bhv_desc_t *bdp, int flags, lastclose_t lastclose, struct cred *cr)
 {
 	struct p9node *pn = BHV_TO_PN(bdp);
 	vnode_t *vp = pn->pn_vp;
@@ -507,7 +507,7 @@ p9fs_close(bhv_desc_t *bdp, int flags, lastclose_t lastclose, struct cred *cr)
 
 /*ARGSUSED*/
 static int
-p9fs_getattr(bhv_desc_t *bdp, struct vattr *vap, int flags, struct cred *cr)
+virtio_9p_getattr(bhv_desc_t *bdp, struct vattr *vap, int flags, struct cred *cr)
 {
 	struct p9node *pn = BHV_TO_PN(bdp);
 	vnode_t *vp = pn->pn_vp;
@@ -534,7 +534,7 @@ p9fs_getattr(bhv_desc_t *bdp, struct vattr *vap, int flags, struct cred *cr)
 	vap->va_ctime.tv_sec = (time_t)pn->pn_attr.ctime.sec;
 	vap->va_ctime.tv_nsec = (long)pn->pn_attr.ctime.nsec;
 	vap->va_rdev = 0;
-	vap->va_blksize = P9FS_BSIZE;
+	vap->va_blksize = VIRTIO_9P_BSIZE;
 	vap->va_nblocks = (blkcnt_t)pn->pn_attr.blocks;
 	vap->va_vcode = 0;
 	vap->va_xflags = 0;
@@ -548,7 +548,7 @@ p9fs_getattr(bhv_desc_t *bdp, struct vattr *vap, int flags, struct cred *cr)
 }
 
 static int
-p9fs_setattr(bhv_desc_t *bdp, struct vattr *vap, int flags, struct cred *cr)
+virtio_9p_setattr(bhv_desc_t *bdp, struct vattr *vap, int flags, struct cred *cr)
 {
 	struct p9node *pn = BHV_TO_PN(bdp);
 	vnode_t *vp = pn->pn_vp;
@@ -657,7 +657,7 @@ p9fs_setattr(bhv_desc_t *bdp, struct vattr *vap, int flags, struct cred *cr)
 }
 
 static int
-p9fs_access(bhv_desc_t *bdp, int mode, struct cred *cr)
+virtio_9p_access(bhv_desc_t *bdp, int mode, struct cred *cr)
 {
 	struct p9node *pn = BHV_TO_PN(bdp);
 	int err;
@@ -669,7 +669,7 @@ p9fs_access(bhv_desc_t *bdp, int mode, struct cred *cr)
 
 /*ARGSUSED*/
 static int
-p9fs_ioctl(bhv_desc_t *bdp, int cmd, void *arg, int flag, struct cred *cr,
+virtio_9p_ioctl(bhv_desc_t *bdp, int cmd, void *arg, int flag, struct cred *cr,
 	   int *rvalp, struct vopbd *vbds)
 {
 	return ENOTTY;
@@ -677,7 +677,7 @@ p9fs_ioctl(bhv_desc_t *bdp, int cmd, void *arg, int flag, struct cred *cr,
 
 /*ARGSUSED*/
 static int
-p9fs_fcntl(bhv_desc_t *bdp, int cmd, void *arg, int flags, off_t offset,
+virtio_9p_fcntl(bhv_desc_t *bdp, int cmd, void *arg, int flags, off_t offset,
 	   struct cred *cr, union rval *rvp)
 {
 	return EINVAL;
@@ -685,7 +685,7 @@ p9fs_fcntl(bhv_desc_t *bdp, int cmd, void *arg, int flags, off_t offset,
 
 /*ARGSUSED*/
 static int
-p9fs_seek(bhv_desc_t *bdp, off_t ooff, off_t *noffp)
+virtio_9p_seek(bhv_desc_t *bdp, off_t ooff, off_t *noffp)
 {
 	return *noffp < 0 ? EINVAL : 0;
 }
@@ -694,7 +694,7 @@ p9fs_seek(bhv_desc_t *bdp, off_t ooff, off_t *noffp)
 
 /*ARGSUSED*/
 static int
-p9fs_lookup(bhv_desc_t *bdp, char *name, vnode_t **vpp, struct pathname *pnp,
+virtio_9p_lookup(bhv_desc_t *bdp, char *name, vnode_t **vpp, struct pathname *pnp,
 	    int flags, vnode_t *rdir, struct cred *cr)
 {
 	struct p9node *dpn = BHV_TO_PN(bdp);
@@ -720,7 +720,7 @@ p9fs_lookup(bhv_desc_t *bdp, char *name, vnode_t **vpp, struct pathname *pnp,
 
 /*ARGSUSED*/
 static int
-p9fs_create(bhv_desc_t *bdp, char *name, struct vattr *vap, int flags, int mode,
+virtio_9p_create(bhv_desc_t *bdp, char *name, struct vattr *vap, int flags, int mode,
 	    vnode_t **vpp, struct cred *cr)
 {
 	struct p9node *dpn = BHV_TO_PN(bdp);
@@ -759,7 +759,7 @@ p9fs_create(bhv_desc_t *bdp, char *name, struct vattr *vap, int flags, int mode,
 
 			va.va_mask = AT_SIZE;
 			va.va_size = vap->va_size;
-			err = p9fs_setattr(&pn->pn_bhv, &va, 0, cr);
+			err = virtio_9p_setattr(&pn->pn_bhv, &va, 0, cr);
 		}
 		if (err != 0) {
 			VN_RELE(pn->pn_vp);
@@ -815,7 +815,7 @@ p9fs_create(bhv_desc_t *bdp, char *name, struct vattr *vap, int flags, int mode,
 }
 
 static int
-p9fs_remove(bhv_desc_t *bdp, char *name, struct cred *cr)
+virtio_9p_remove(bhv_desc_t *bdp, char *name, struct cred *cr)
 {
 	struct p9node *dpn = BHV_TO_PN(bdp);
 	struct p9node *pn;
@@ -853,14 +853,14 @@ p9fs_remove(bhv_desc_t *bdp, char *name, struct cred *cr)
 }
 
 static int
-p9fs_link(bhv_desc_t *bdp, vnode_t *svp, char *name, struct cred *cr)
+virtio_9p_link(bhv_desc_t *bdp, vnode_t *svp, char *name, struct cred *cr)
 {
 	struct p9node *dpn = BHV_TO_PN(bdp);
 	struct p9node *pn;
 	bhv_desc_t *sbdp;
 	int err;
 
-	sbdp = vn_bhv_lookup_unlocked(VN_BHV_HEAD(svp), &p9fs_vnodeops);
+	sbdp = vn_bhv_lookup_unlocked(VN_BHV_HEAD(svp), &virtio_9p_vnodeops);
 	if (sbdp == 0)
 		return EXDEV;
 	pn = BHV_TO_PN(sbdp);
@@ -884,7 +884,7 @@ p9fs_link(bhv_desc_t *bdp, vnode_t *svp, char *name, struct cred *cr)
 
 /*ARGSUSED*/
 static int
-p9fs_rename(bhv_desc_t *bdp, char *oname, vnode_t *ndvp, char *nname,
+virtio_9p_rename(bhv_desc_t *bdp, char *oname, vnode_t *ndvp, char *nname,
 	    struct pathname *npnp, struct cred *cr)
 {
 	struct p9node *odpn = BHV_TO_PN(bdp);
@@ -892,7 +892,7 @@ p9fs_rename(bhv_desc_t *bdp, char *oname, vnode_t *ndvp, char *nname,
 	bhv_desc_t *nbdp;
 	int err;
 
-	nbdp = vn_bhv_lookup_unlocked(VN_BHV_HEAD(ndvp), &p9fs_vnodeops);
+	nbdp = vn_bhv_lookup_unlocked(VN_BHV_HEAD(ndvp), &virtio_9p_vnodeops);
 	if (nbdp == 0)
 		return EXDEV;
 	ndpn = BHV_TO_PN(nbdp);
@@ -929,7 +929,7 @@ p9fs_rename(bhv_desc_t *bdp, char *oname, vnode_t *ndvp, char *nname,
 
 /*ARGSUSED*/
 static int
-p9fs_mkdir(bhv_desc_t *bdp, char *name, struct vattr *vap, vnode_t **vpp,
+virtio_9p_mkdir(bhv_desc_t *bdp, char *name, struct vattr *vap, vnode_t **vpp,
 	   struct cred *cr)
 {
 	struct p9node *dpn = BHV_TO_PN(bdp);
@@ -956,7 +956,7 @@ p9fs_mkdir(bhv_desc_t *bdp, char *name, struct vattr *vap, vnode_t **vpp,
 }
 
 static int
-p9fs_rmdir(bhv_desc_t *bdp, char *name, vnode_t *cdir, struct cred *cr)
+virtio_9p_rmdir(bhv_desc_t *bdp, char *name, vnode_t *cdir, struct cred *cr)
 {
 	struct p9node *dpn = BHV_TO_PN(bdp);
 	struct p9node *pn;
@@ -994,7 +994,7 @@ p9fs_rmdir(bhv_desc_t *bdp, char *name, vnode_t *cdir, struct cred *cr)
 
 /*ARGSUSED*/
 static int
-p9fs_symlink(bhv_desc_t *bdp, char *name, struct vattr *vap, char *target,
+virtio_9p_symlink(bhv_desc_t *bdp, char *name, struct vattr *vap, char *target,
 	     struct cred *cr)
 {
 	struct p9node *dpn = BHV_TO_PN(bdp);
@@ -1017,7 +1017,7 @@ p9fs_symlink(bhv_desc_t *bdp, char *name, struct vattr *vap, char *target,
 
 /*ARGSUSED*/
 static int
-p9fs_readlink(bhv_desc_t *bdp, struct uio *uio, struct cred *cr)
+virtio_9p_readlink(bhv_desc_t *bdp, struct uio *uio, struct cred *cr)
 {
 	struct p9node *pn = BHV_TO_PN(bdp);
 	char *buf;
@@ -1042,7 +1042,7 @@ p9fs_readlink(bhv_desc_t *bdp, struct uio *uio, struct cred *cr)
 
 /*ARGSUSED*/
 static int
-p9fs_readdir(bhv_desc_t *bdp, struct uio *uio, struct cred *cr, int *eofp)
+virtio_9p_readdir(bhv_desc_t *bdp, struct uio *uio, struct cred *cr, int *eofp)
 {
 	struct p9node *pn = BHV_TO_PN(bdp);
 	struct p9_dirent e;
@@ -1121,21 +1121,21 @@ out:
 static void
 pn_bmap(struct p9node *pn, off_t off, ssize_t count, struct bmapval *bmv)
 {
-	off_t mod = off % P9FS_BSIZE;
+	off_t mod = off % VIRTIO_9P_BSIZE;
 
 	bmv->bn = bmv->offset = OFFTOBBT(off - mod);
 	bmv->pmp = 0;
-	bmv->length = BTOBBT(P9FS_BSIZE);
-	bmv->bsize = P9FS_BSIZE;
+	bmv->length = BTOBBT(VIRTIO_9P_BSIZE);
+	bmv->bsize = VIRTIO_9P_BSIZE;
 	bmv->pboff = (int)mod;
-	bmv->pbsize = (int)(count < P9FS_BSIZE - mod ? count : P9FS_BSIZE - mod);
+	bmv->pbsize = (int)(count < VIRTIO_9P_BSIZE - mod ? count : VIRTIO_9P_BSIZE - mod);
 	bmv->pbdev = PN_TO_VFS(pn)->vfs_dev;
-	bmv->eof = (off - mod + P9FS_BSIZE >= pn->pn_size) ? BMAP_EOF : 0;
+	bmv->eof = (off - mod + VIRTIO_9P_BSIZE >= pn->pn_size) ? BMAP_EOF : 0;
 }
 
 /*ARGSUSED*/
 static int
-p9fs_bmap(bhv_desc_t *bdp, off_t offset, ssize_t count, int flags, struct cred *cr,
+virtio_9p_bmap(bhv_desc_t *bdp, off_t offset, ssize_t count, int flags, struct cred *cr,
 	  struct bmapval *bmv, int *nbmv)
 {
 	pn_bmap(BHV_TO_PN(bdp), offset, count, bmv);
@@ -1192,7 +1192,7 @@ p9_write_all(struct p9node *pn, off_t off, char *addr, unsigned int len)
 }
 
 static void
-p9fs_strategy(bhv_desc_t *bdp, struct buf *bp)
+virtio_9p_strategy(bhv_desc_t *bdp, struct buf *bp)
 {
 	struct p9node *pn = BHV_TO_PN(bdp);
 	off_t off = BBTOOFF(bp->b_offset);
@@ -1244,7 +1244,7 @@ p9fs_strategy(bhv_desc_t *bdp, struct buf *bp)
 }
 
 static int
-p9fs_rw(struct p9node *pn, struct uio *uio, enum uio_rw rw, int ioflag,
+virtio_9p_rw(struct p9node *pn, struct uio *uio, enum uio_rw rw, int ioflag,
 	struct cred *cr)
 {
 	vnode_t *vp = pn->pn_vp;
@@ -1260,8 +1260,8 @@ p9fs_rw(struct p9node *pn, struct uio *uio, enum uio_rw rw, int ioflag,
 		uio->uio_offset = pn->pn_size;
 
 	while (uio->uio_resid > 0 && err == 0) {
-		on = uio->uio_offset % P9FS_BSIZE;
-		n = P9FS_BSIZE - on;
+		on = uio->uio_offset % VIRTIO_9P_BSIZE;
+		n = VIRTIO_9P_BSIZE - on;
 		if (n > uio->uio_resid)
 			n = uio->uio_resid;
 		if (rw == UIO_READ) {
@@ -1279,7 +1279,7 @@ p9fs_rw(struct p9node *pn, struct uio *uio, enum uio_rw rw, int ioflag,
 		pn_bmap(pn, uio->uio_offset, n, &bmv);
 		bmv.pmp = uio->uio_pmp;
 		/* A whole block written need not be read first. */
-		if (rw == UIO_WRITE && n == P9FS_BSIZE)
+		if (rw == UIO_WRITE && n == VIRTIO_9P_BSIZE)
 			bp = getchunk(vp, &bmv, cr);
 		else
 			bp = chunkread(vp, &bmv, 1, cr);
@@ -1307,7 +1307,7 @@ p9fs_rw(struct p9node *pn, struct uio *uio, enum uio_rw rw, int ioflag,
 		MUTEX_UNLOCK(pn->pn_lock);
 		if (ioflag & (IO_SYNC | IO_DSYNC))
 			err = bwrite(bp);
-		else if (on + n == P9FS_BSIZE)
+		else if (on + n == VIRTIO_9P_BSIZE)
 			bawrite(bp);
 		else
 			bdwrite(bp);
@@ -1317,7 +1317,7 @@ p9fs_rw(struct p9node *pn, struct uio *uio, enum uio_rw rw, int ioflag,
 
 /*ARGSUSED*/
 static int
-p9fs_read(bhv_desc_t *bdp, struct uio *uio, int ioflag, struct cred *cr,
+virtio_9p_read(bhv_desc_t *bdp, struct uio *uio, int ioflag, struct cred *cr,
 	  struct flid *fl)
 {
 	struct p9node *pn = BHV_TO_PN(bdp);
@@ -1331,19 +1331,19 @@ p9fs_read(bhv_desc_t *bdp, struct uio *uio, int ioflag, struct cred *cr,
 		/* The caller holds the rwlock, so pages stay as they are. */
 		if ((err = pn_refresh(pn)) != 0)
 			return err;
-		return p9fs_rw(pn, uio, UIO_READ, ioflag, cr);
+		return virtio_9p_rw(pn, uio, UIO_READ, ioflag, cr);
 	}
 	if ((err = pn_revalidate(pn)) != 0)
 		return err;
 	mraccess(&pn->pn_rwlock);
-	err = p9fs_rw(pn, uio, UIO_READ, ioflag, cr);
+	err = virtio_9p_rw(pn, uio, UIO_READ, ioflag, cr);
 	mrunlock(&pn->pn_rwlock);
 	return err;
 }
 
 /*ARGSUSED*/
 static int
-p9fs_write(bhv_desc_t *bdp, struct uio *uio, int ioflag, struct cred *cr,
+virtio_9p_write(bhv_desc_t *bdp, struct uio *uio, int ioflag, struct cred *cr,
 	   struct flid *fl)
 {
 	struct p9node *pn = BHV_TO_PN(bdp);
@@ -1354,15 +1354,15 @@ p9fs_write(bhv_desc_t *bdp, struct uio *uio, int ioflag, struct cred *cr,
 	if (IS_RDONLY(pn))
 		return EROFS;
 	if (ioflag & IO_ISLOCKED)
-		return p9fs_rw(pn, uio, UIO_WRITE, ioflag, cr);
+		return virtio_9p_rw(pn, uio, UIO_WRITE, ioflag, cr);
 	mrupdate(&pn->pn_rwlock);
-	err = p9fs_rw(pn, uio, UIO_WRITE, ioflag, cr);
+	err = virtio_9p_rw(pn, uio, UIO_WRITE, ioflag, cr);
 	mrunlock(&pn->pn_rwlock);
 	return err;
 }
 
 static void
-p9fs_rwlock(bhv_desc_t *bdp, vrwlock_t write)
+virtio_9p_rwlock(bhv_desc_t *bdp, vrwlock_t write)
 {
 	struct p9node *pn = BHV_TO_PN(bdp);
 
@@ -1374,14 +1374,14 @@ p9fs_rwlock(bhv_desc_t *bdp, vrwlock_t write)
 
 /*ARGSUSED*/
 static void
-p9fs_rwunlock(bhv_desc_t *bdp, vrwlock_t write)
+virtio_9p_rwunlock(bhv_desc_t *bdp, vrwlock_t write)
 {
 	mrunlock(&BHV_TO_PN(bdp)->pn_rwlock);
 }
 
 /*ARGSUSED*/
 static int
-p9fs_fsync(bhv_desc_t *bdp, int flags, struct cred *cr, off_t start, off_t stop)
+virtio_9p_fsync(bhv_desc_t *bdp, int flags, struct cred *cr, off_t start, off_t stop)
 {
 	struct p9node *pn = BHV_TO_PN(bdp);
 	vnode_t *vp = pn->pn_vp;
@@ -1415,7 +1415,7 @@ p9fs_fsync(bhv_desc_t *bdp, int flags, struct cred *cr, off_t start, off_t stop)
 
 /*ARGSUSED*/
 static int
-p9fs_inactive(bhv_desc_t *bdp, struct cred *cr)
+virtio_9p_inactive(bhv_desc_t *bdp, struct cred *cr)
 {
 	struct p9node *pn = BHV_TO_PN(bdp);
 	vnode_t *vp = pn->pn_vp;
@@ -1439,7 +1439,7 @@ p9fs_inactive(bhv_desc_t *bdp, struct cred *cr)
 
 /*ARGSUSED*/
 static int
-p9fs_reclaim(bhv_desc_t *bdp, int flag)
+virtio_9p_reclaim(bhv_desc_t *bdp, int flag)
 {
 	struct p9node *pn = BHV_TO_PN(bdp);
 	struct p9mount *pm = pn->pn_mnt;
@@ -1453,7 +1453,7 @@ p9fs_reclaim(bhv_desc_t *bdp, int flag)
 	VOP_FLUSHINVAL_PAGES(vp, 0, FILE_LAST, FI_NONE);
 
 	MUTEX_LOCK(pm->pm_hashlock, -1);
-	for (pp = &pm->pm_hash[pn->pn_path % P9FS_HASHSZ]; *pp != 0;
+	for (pp = &pm->pm_hash[pn->pn_path % VIRTIO_9P_HASHSZ]; *pp != 0;
 	    pp = &(*pp)->pn_hnext) {
 		if (*pp == pn) {
 			*pp = pn->pn_hnext;
@@ -1475,7 +1475,7 @@ p9fs_reclaim(bhv_desc_t *bdp, int flag)
 #define SYNC_TRIES	64
 
 void
-p9fs_sync_all(struct p9mount *pm, int wait)
+virtio_9p_sync_all(struct p9mount *pm, int wait)
 {
 	struct p9node *pn;
 	vnode_t *vp;
@@ -1483,7 +1483,7 @@ p9fs_sync_all(struct p9mount *pm, int wait)
 	unsigned int i;
 	int tries;
 
-	for (i = 0; i < P9FS_HASHSZ; i++) {
+	for (i = 0; i < VIRTIO_9P_HASHSZ; i++) {
 		for (tries = 0; tries < SYNC_TRIES; tries++) {
 			/* From the top each time: the chain may change during a flush. */
 			MUTEX_LOCK(pm->pm_hashlock, -1);
@@ -1507,39 +1507,39 @@ p9fs_sync_all(struct p9mount *pm, int wait)
 
 /* -------- the table -------- */
 
-vnodeops_t p9fs_vnodeops = {
+vnodeops_t virtio_9p_vnodeops = {
 	BHV_IDENTITY_INIT_POSITION(VNODE_POSITION_BASE),
-	p9fs_open,
-	p9fs_close,
-	p9fs_read,
-	p9fs_write,
-	p9fs_ioctl,
+	virtio_9p_open,
+	virtio_9p_close,
+	virtio_9p_read,
+	virtio_9p_write,
+	virtio_9p_ioctl,
 	fs_setfl,
-	p9fs_getattr,
-	p9fs_setattr,
-	p9fs_access,
-	p9fs_lookup,
-	p9fs_create,
-	p9fs_remove,
-	p9fs_link,
-	p9fs_rename,
-	p9fs_mkdir,
-	p9fs_rmdir,
-	p9fs_readdir,
-	p9fs_symlink,
-	p9fs_readlink,
-	p9fs_fsync,
-	p9fs_inactive,
+	virtio_9p_getattr,
+	virtio_9p_setattr,
+	virtio_9p_access,
+	virtio_9p_lookup,
+	virtio_9p_create,
+	virtio_9p_remove,
+	virtio_9p_link,
+	virtio_9p_rename,
+	virtio_9p_mkdir,
+	virtio_9p_rmdir,
+	virtio_9p_readdir,
+	virtio_9p_symlink,
+	virtio_9p_readlink,
+	virtio_9p_fsync,
+	virtio_9p_inactive,
 	(vop_fid_t)fs_nosys,
 	(vop_fid2_t)fs_nosys,
-	p9fs_rwlock,
-	p9fs_rwunlock,
-	p9fs_seek,
+	virtio_9p_rwlock,
+	virtio_9p_rwunlock,
+	virtio_9p_seek,
 	fs_cmp,
 	fs_frlock,
 	(vop_realvp_t)fs_nosys,
-	p9fs_bmap,
-	p9fs_strategy,
+	virtio_9p_bmap,
+	virtio_9p_strategy,
 	(vop_map_t)fs_noerr,
 	(vop_addmap_t)fs_noerr,
 	(vop_delmap_t)fs_noerr,
@@ -1547,8 +1547,8 @@ vnodeops_t p9fs_vnodeops = {
 	(vop_dump_t)fs_nosys,
 	fs_pathconf,
 	(vop_allocstore_t)fs_nosys,
-	p9fs_fcntl,
-	p9fs_reclaim,
+	virtio_9p_fcntl,
+	virtio_9p_reclaim,
 	(vop_attr_get_t)fs_nosys,
 	(vop_attr_set_t)fs_nosys,
 	(vop_attr_remove_t)fs_nosys,

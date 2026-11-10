@@ -2,7 +2,7 @@
  * Guest side of the virtio-serial tests: tests/iris/run_tests.py runs it inside
  * IRIX against a host end it controls.
  *
- *   vstest info PATH              the port's VIOSER_GETINFO, one line
+ *   vstest info PATH              the port's VIRTIO_SERIAL_GETINFO, one line
  *   vstest send PATH TEXT         write TEXT
  *   vstest recv PATH N            read N bytes, print them
  *   vstest eof PATH               read until end of file, print the byte count
@@ -24,7 +24,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "vioser.h"
+#include "virtio_serial.h"
 
 static void
 die(const char *what)
@@ -53,14 +53,14 @@ pat(long i)
 static int
 cmd_info(const char *path)
 {
-	struct vioser_info vi;
+	struct virtio_serial_info vi;
 	int fd = xopen(path, O_RDWR);
 
-	if (ioctl(fd, VIOSER_GETINFO, &vi) < 0)
-		die("VIOSER_GETINFO");
+	if (ioctl(fd, VIRTIO_SERIAL_GETINFO, &vi) < 0)
+		die("VIRTIO_SERIAL_GETINFO");
 	printf("port=%u console=%d host_open=%d name=%s\n", vi.vi_port,
-	    (vi.vi_flags & VIOSER_F_CONSOLE) != 0,
-	    (vi.vi_flags & VIOSER_F_HOST_OPEN) != 0, vi.vi_name);
+	    (vi.vi_flags & VIRTIO_SERIAL_F_CONSOLE) != 0,
+	    (vi.vi_flags & VIRTIO_SERIAL_F_HOST_OPEN) != 0, vi.vi_name);
 	return 0;
 }
 

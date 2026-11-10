@@ -2,12 +2,12 @@
 # Load the virtio-serial driver at boot and name its ports under /dev.
 case "$1" in
 start)
-	if /sbin/ml ld -c /usr/lib/vioser/vioser.o -p vioser_; then
+	if /sbin/ml ld -c /usr/lib/virtio_serial/virtio_serial.o -p virtio_serial_; then
 		[ -d /hw/virtio-ports ] && ln -sf /hw/virtio-ports /dev/virtio-ports
 	fi
 	;;
 stop)
-	id=`/sbin/ml list -l | awk '/vioser/ { print $2 }'`
+	id=`/sbin/ml list -l | awk '/virtio_serial/ { print $2 }'`
 	[ -n "$id" ] && /sbin/ml unld $id
 	rm -f /dev/virtio-ports
 	;;

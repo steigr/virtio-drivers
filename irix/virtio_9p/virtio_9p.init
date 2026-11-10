@@ -2,13 +2,13 @@
 # Load the 9p filesystem at boot and mount what /etc/fstab has of that type.
 case "$1" in
 start)
-	if /sbin/ml ld -j /usr/lib/p9fs/p9fs.o -p p9fs_ -a 9p; then
+	if /sbin/ml ld -j /usr/lib/virtio_9p/virtio_9p.o -p virtio_9p_ -a 9p; then
 		/sbin/mount -a -t 9p
 	fi
 	;;
 stop)
 	/sbin/umount -a -t 9p
-	id=`/sbin/ml list -l | awk '/p9fs/ { print $2 }'`
+	id=`/sbin/ml list -l | awk '/virtio_9p/ { print $2 }'`
 	[ -n "$id" ] && /sbin/ml unld $id
 	;;
 *)
