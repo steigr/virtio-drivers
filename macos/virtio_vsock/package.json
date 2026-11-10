@@ -1,0 +1,12 @@
+{
+  "name": "VirtioVsock",
+  "identifier": "io.virtio.virtio-vsock",
+  "version": "0.0.0",
+  "title": "Virtio Vsock",
+  "description": "virtio-vsock (AF_VSOCK-style sockets to the host), with vsockcat.",
+  "restart": "required",
+  "files": [
+    {"srcdir": "kexts/VirtioVsock.kext", "dest": "/System/Library/Extensions/VirtioVsock.kext", "filemode": "0644"},
+    {"src": "kexts/vsockcat", "dest": "/usr/local/bin/vsockcat", "mode": "0755"}
+  ]
+}

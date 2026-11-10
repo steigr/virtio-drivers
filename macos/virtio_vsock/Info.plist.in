@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>English</string>
+	<key>CFBundleExecutable</key>
+	<string>VirtioVsock</string>
+	<key>CFBundleIdentifier</key>
+	<string>io.virtio.driver.VirtioVsock</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>VirtioVsock</string>
+	<key>CFBundlePackageType</key>
+	<string>KEXT</string>
+	<key>CFBundleShortVersionString</key>
+	<string>@VERSION@</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleVersion</key>
+	<string>@VERSION@</string>
+	<key>IOKitPersonalities</key>
+	<dict>
+		<!-- QEMU's virtio socket device: vhost-vsock-pci (1af4:1053, modern only). By vendor and
+		     device where IOPCIFamily matches IOPCIMatch, and by the name OpenBIOS gives the node
+		     where it matches names. IOUserClientClass makes IOServiceOpen on the driver create
+		     the user client. Polled set to true makes the driver poll even where the device's
+		     interrupt could be had. IOProbeScore: on 10.14 and 10.15 AppleVirtIO's generic
+		     AppleVirtIOPCITransport matches every virtio device, this one too, and puts nothing on
+		     it; with equal scores it took VirtioNet's device on some boots (../virtionet's
+		     Info.plist.in), so this one outbids it. -->
+		<key>VirtioVsock</key>
+		<dict>
+			<key>CFBundleIdentifier</key>
+			<string>io.virtio.driver.VirtioVsock</string>
+			<key>IOClass</key>
+			<string>io_virtio_VirtioVsock</string>
+			<key>IOPCIMatch</key>
+			<string>0x10531af4</string>
+			<key>IOProviderClass</key>
+			<string>IOPCIDevice</string>
+			<key>IOUserClientClass</key>
+			<string>io_virtio_VirtioVsockClient</string>
+			<key>IOProbeScore</key>
+			<integer>50000</integer>
+			<key>Polled</key>
+			<false/>
+		</dict>
+		<key>VirtioVsockByName</key>
+		<dict>
+			<key>CFBundleIdentifier</key>
+			<string>io.virtio.driver.VirtioVsock</string>
+			<key>IOClass</key>
+			<string>io_virtio_VirtioVsock</string>
+			<key>IONameMatch</key>
+			<string>pci1af4,1053</string>
+			<key>IOProviderClass</key>
+			<string>IOPCIDevice</string>
+			<key>IOUserClientClass</key>
+			<string>io_virtio_VirtioVsockClient</string>
+			<key>IOProbeScore</key>
+			<integer>50000</integer>
+			<key>Polled</key>
+			<false/>
+		</dict>
+	</dict>
+	<key>OSBundleLibraries</key>
+	<dict>
+@LIBRARIES@
+	</dict>
+</dict>
+</plist>
