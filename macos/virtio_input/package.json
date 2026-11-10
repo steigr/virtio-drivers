@@ -1,0 +1,11 @@
+{
+  "name": "VirtioTablet",
+  "identifier": "io.virtio.virtio-tablet",
+  "version": "0.0.0",
+  "title": "Virtio Tablet",
+  "description": "virtio-tablet-pci as an absolute pointer: the cursor follows the host's (VNC, QEMU window); virtio-mouse-pci as a mouse.",
+  "restart": "required",
+  "files": [
+    {"srcdir": "kexts/VirtioTablet.kext", "dest": "/System/Library/Extensions/VirtioTablet.kext", "filemode": "0644"}
+  ]
+}
