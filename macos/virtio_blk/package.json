@@ -1,0 +1,11 @@
+{
+  "name": "VirtioBlock",
+  "identifier": "io.virtio.virtio-block",
+  "version": "0.0.0",
+  "title": "Virtio Block",
+  "description": "virtio-blk disks as IOBlockStorageDevice.",
+  "restart": "required",
+  "files": [
+    {"srcdir": "kexts/VirtioBlock.kext", "dest": "/System/Library/Extensions/VirtioBlock.kext", "filemode": "0644"}
+  ]
+}
