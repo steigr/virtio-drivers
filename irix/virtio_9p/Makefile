@@ -10,6 +10,9 @@
 #
 # /share may be NFS and noexec, so objects go to local disk.
 OBJDIR  = /tmp/virtio_9p.$(CPUBOARD)
+# The first target is the default: name it before virtio.mk's rules.
+default: all
+
 include ../virtio/virtio.mk
 
 # One module object, so ml can load it: the parts, linked with ld -r.
