@@ -72,7 +72,7 @@ Utility initialises it.
 
 ## Why it is built three times, and in the guests
 
-As VirtioConsole and VirtioNet (`../ppc/virtioconsole/README.md`, `../virtionet/README.md`):
+As VirtioConsole and VirtioNet (`../virtio_console/README.md`, `../virtio_net/README.md`):
 the kernel's C++ ABI differs between GCC 2.95 (10.0, 10.1) and GCC 3 (10.2 on); and Intel is
 another architecture again, with two kernels of its own.
 
@@ -87,7 +87,7 @@ another architecture again, with two kernels of its own.
     make ABI=intel                                                               # on 10.6
 
 Each leaves `build/<ABI>/VirtioBlock.kext`. The build and copy steps are
-`../virtio9p/README.md`'s "Rebuilding, step by step" with `virtioblock` for `virtio9p`. Unlike
+`macos/virtio9p's README.md`'s "Rebuilding, step by step" with `virtioblock` for `virtio9p`. Unlike
 VirtioNet's, the `gcc2` build needs no `-fpermissive` (that was `netinet/in.h` through
 IOEthernetController.h), and neither build declares `com.apple.kernel.bsd`: no BSD symbol is used.
 The library `com.apple.iokit.IOStorageFamily` is asked for at 1.0.0b1 (an assumption, see below).

@@ -77,7 +77,7 @@ Streams only: a SEQPACKET packet is answered with an RST.
 ## Intel
 
 The same source, built against the kernel programming interfaces of 10.4 on, as VirtioNet's Intel
-build is (`../virtionet/README.md`'s "Intel: one more build, against the kernel programming
+build is (`../virtio_net/README.md`'s "Intel: one more build, against the kernel programming
 interfaces"):
 
     make ABI=kpi intel  # on 10.6 with Xcode 3.2.6: build/intel/10.4, build/intel/10.6, vsockcat
@@ -120,7 +120,7 @@ on pci-serial lost most of its input -- 267 resyncs and 76 partial requests to 2
 
 ## Why it is built twice, and in the guests
 
-As VirtioConsole (`../ppc/virtioconsole/README.md`, which also says where the toolchains come from):
+As VirtioConsole (`../virtio_console/README.md`, which also says where the toolchains come from):
 the kernel's C++ ABI differs between GCC 2.95 (10.0, 10.1) and GCC 3 (10.2 on).
 
 | Build | For | Built on | Headers and kmod libraries |
@@ -133,8 +133,8 @@ the kernel's C++ ABI differs between GCC 2.95 (10.0, 10.1) and GCC 3 (10.2 on).
 
 Each leaves `build/<ABI>/VirtioVsock.kext` and `build/vsockcat` (the tools build on either).
 Neither build declares `com.apple.kernel.bsd` (no one version satisfies both 10.0 and 10.1, see
-`../virtio9p`): the driver uses no BSD symbol. Both build without a warning. The build and copy steps
-are `../virtio9p/README.md`'s "Rebuilding, step by step", with `virtiovsock` for `virtio9p`; note
+`macos/virtio9p`): the driver uses no BSD symbol. Both build without a warning. The build and copy steps
+are `macos/virtio9p's README.md`'s "Rebuilding, step by step", with `virtiovsock` for `virtio9p`; note
 that a guest's `/tmp` is emptied at boot, so 10.0's headers (`k100`) must be copied in again.
 
 ## Testing

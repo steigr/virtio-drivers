@@ -102,7 +102,7 @@ on each boot, which lets SIP load an unsigned kext on 10.11 and later.
 
 ## PowerPC: why it is built twice, and in the guests
 
-As VirtioConsole (`../ppc/virtioconsole/README.md`, which also says where the toolchains come from):
+As VirtioConsole (`../virtio_console/README.md`, which also says where the toolchains come from):
 the kernel's C++ ABI differs between GCC 2.95 (10.0, 10.1) and GCC 3 (10.2 on).
 
 | Build | For | Built on | Headers and kmod libraries |
@@ -124,10 +124,10 @@ Each leaves `build/<ABI>/VirtioNet.kext`. What differs from VirtioConsole's buil
 - Both builds ask for `com.apple.iokit.IONetworkingFamily` 1.0.0b1. It is 1.0.7 inside 10.0's
   System.kext, 1.1 on 10.1, 1.2 on 10.2 and 1.4.0 on 10.3, each compatible back to 1.0.0b1.
 - Neither declares `com.apple.kernel.bsd` (no one version satisfies both 10.0 and 10.1, see
-  `../virtio9p`): the driver uses no BSD symbol. Mbufs are allocated and freed through
+  `macos/virtio9p`): the driver uses no BSD symbol. Mbufs are allocated and freed through
   IONetworkController and walked by their fields.
 
-The build and copy steps are `../virtio9p/README.md`'s "Rebuilding, step by step", with
+The build and copy steps are `macos/virtio9p's README.md`'s "Rebuilding, step by step", with
 `virtionet` for `virtio9p` and `VirtioNet.kext` for `Virtio9P.kext` (there is no `mount_9p`).
 
 ## Testing

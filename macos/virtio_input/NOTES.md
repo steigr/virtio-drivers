@@ -119,7 +119,7 @@ clear of it. 10.2 and 10.3 keep the class's size and grow through that pointer.
 
 ## Why it is built twice, and in the guests
 
-As VirtioConsole (`../virtioconsole/README.md`, which also says where the toolchains come from):
+As VirtioConsole (`../virtio_console/README.md`, which also says where the toolchains come from):
 the kernel's C++ ABI differs between GCC 2.95 (10.0, 10.1) and GCC 3 (10.2 on).
 
 | Build | For | Built on | Headers and kmod libraries |
@@ -194,4 +194,4 @@ the Finder's Applications window.
   `hw/input/virtio-input.c` (a report is held until slots for all of it are queued).
 - Apple's xnu-123.5 `iokit/Families/IOHIDSystem` (10.0), IOHIDFamily-34.12 (10.2) and -86.26
   (10.3): `IOHIPointing::dispatchAbsolutePointerEvent` and `IOHIDSystem::_scaleLocationToCurrentScreen`.
-- `../../virtiovsock` here, whose modern virtio-pci transport this reuses.
+- `../../virtio_vsock` here, whose modern virtio-pci transport this reuses.
