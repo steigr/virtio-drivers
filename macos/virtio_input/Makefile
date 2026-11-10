@@ -1,5 +1,5 @@
 # Builds VirtioTablet.kext inside a PowerPC Mac OS X guest, with that guest's own Developer Tools,
-# the way ../virtioconsole is built (see its Makefile for where every compiler flag comes from and
+# the way ../virtio_console is built (see its Makefile for where every compiler flag comes from and
 # the failure behind each):
 #
 #   make ABI=gcc2   on 10.0 or 10.1 (GCC 2.95): for 10.0 and 10.1
@@ -52,7 +52,7 @@ $(BUILD)/VirtioTablet: $(BUILD)/VirtioTablet.o $(BUILD)/VirtioTablet_info.o
 
 # perl rather than sed: 10.1's sed cannot put a file's lines into a replacement.
 # The comments of Info.plist.in are dropped from the built plist: BootX ends a <dict> at an XML
-# comment (see ../virtiorand/Makefile).
+# comment (see ../virtio_rng/Makefile).
 $(KEXT): $(BUILD)/VirtioTablet Info.plist.in libraries-$(ABI).xml
 	rm -rf $(KEXT)
 	mkdir -p $(KEXT)/Contents/MacOS

@@ -1,5 +1,5 @@
 # Builds VirtioNet.kext inside a Mac OS X guest, with that guest's own Developer Tools. On PowerPC
-# the way ../ppc/virtioconsole is built (see its Makefile for where every compiler flag comes from
+# the way ../virtio_console is built (see its Makefile for where every compiler flag comes from
 # and the failure behind each); on Intel against the kernel programming interfaces of 10.4 on:
 #
 #   make ABI=gcc2   on 10.1 with the December 2001 tools (GCC 2.95): for 10.0 and 10.1, PowerPC
@@ -36,7 +36,7 @@ CXXFLAGS = $(CFLAGS) -fno-rtti -fno-exceptions -fcheck-new $(CXXFLAGS_$(ABI))
 # in place of IOSerialFamily: 1.0.7 in 10.0's System.kext, 1.1 on 10.1, 1.2 on 10.2, 1.4.0 on
 # 10.3, each compatible back to 1.0.0b1 (read off the guests, 2026-10-01). No com.apple.kernel.bsd:
 # the driver uses no BSD symbol, and no one version of it satisfies both 10.0 and 10.1
-# (../virtio9p).
+# (macos/virtio9p).
 
 BUILD = build/$(ABI)
 KEXT  = $(BUILD)/VirtioNet.kext

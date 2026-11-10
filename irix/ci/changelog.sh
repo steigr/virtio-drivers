@@ -11,6 +11,7 @@
 # already, it is written as it is.
 #
 #   UPDATES_URL  where the bucket is served (default https://updates.$UPDATES_URL)
+#   CHANGELOG_PATHS  space-separated paths the listed commits must touch (default the whole checkout)
 #
 # When the published changelog can't be read, it fails and writes nothing: the release is then published without a
 # changelog, which leaves the published one as it is, rather than replacing it with this entry alone.
@@ -49,7 +50,7 @@ printf '# Changelog\n\nThe %s package for IRIX 6.5 on irix.the update publisher.
 printf '## [%s] - %s\n\n' "$version" "$(date -u +%Y-%m-%d)"
 [ -z "$upstream" ] || printf '%s\n' "- $upstream $version ([release notes]($notes))."
 if [ -n "$previous" ] && git -C "$checkout" merge-base --is-ancestor "$previous" "$head" 2>/dev/null; then
-	git -C "$checkout" log --no-merges --format='- %s' "$previous..$head" | sed 's/ *\[skip ci\]//'
+	git -C "$checkout" log --no-merges --format='- %s' "$previous..$head" -- ${CHANGELOG_PATHS:-.} | sed 's/ *\[skip ci\]//'
 fi
 printf '%s\n' "- Built from [$(echo "$head" | cut -c1-7)]($commits/$head)."
 awk '/^## / && !seen { print ""; seen = 1 } seen' "$tmp/published"

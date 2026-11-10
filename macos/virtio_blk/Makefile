@@ -4,7 +4,7 @@
 #   make ABI=gcc3    on 10.2 with the December 2002 tools (GCC 3):    for PowerPC 10.2 on
 #   make ABI=intel   on 10.6 with Xcode 3.2.6 and its 10.4u and 10.6 SDKs: for Intel 10.4 to 10.15
 #
-# The PowerPC builds are ../ppc/virtioconsole's (see its Makefile for where every compiler flag
+# The PowerPC builds are ../virtio_console's (see its Makefile for where every compiler flag
 # comes from and the failure behind each). Leaves build/<ABI>/VirtioBlock.kext.
 
 VERSION ?= 0.2.7
@@ -29,7 +29,7 @@ CXXFLAGS = $(CFLAGS) -fno-rtti -fno-exceptions -fcheck-new $(CXXFLAGS_$(ABI))
 # OSBundleLibraries come from libraries-$(ABI).xml, as VirtioConsole's, with IOStorageFamily in
 # place of IOSerialFamily; 1.0.0b1 is what VirtioNet's IONetworkingFamily is compatible back to,
 # and is assumed here until read off the guests (README, "Not yet"). No com.apple.kernel.bsd: the
-# driver uses no BSD symbol, and no one version of it satisfies both 10.0 and 10.1 (../virtio9p).
+# driver uses no BSD symbol, and no one version of it satisfies both 10.0 and 10.1 (macos/virtio9p).
 
 BUILD = build/$(ABI)
 KEXT  = $(BUILD)/VirtioBlock.kext

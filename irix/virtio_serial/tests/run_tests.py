@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """End-to-end test of the driver: runs on the host against a guest started with
-tests/iris/boot-ip28.sh, drives the guest over telnet and plays the host ends of
+irix/tests/boot-ip28.sh, drives the guest over telnet and plays the host ends of
 the ports itself.
 
-    tests/iris/run_tests.py WORKDIR [--bytes N]
+    irix/virtio_serial/tests/run_tests.py WORKDIR [--bytes N]
 
 WORKDIR is boot-ip28.sh's work directory, which holds agent.sock.
 IRIS_SRC is an iris checkout, for tools/irix-sh.py (default ../iris).
@@ -17,7 +17,8 @@ import threading
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-IRIS_SRC = os.environ.get("IRIS_SRC", os.path.join(os.path.dirname(ROOT), "iris"))
+# irix/iris, beside this repository: {virtualization/virtio-drivers,irix/iris}
+IRIS_SRC = os.environ.get("IRIS_SRC", os.path.normpath(os.path.join(ROOT, "..", "..", "..", "irix", "iris")))
 IRIX_SH = os.path.join(IRIS_SRC, "tools", "irix-sh.py")
 TELNET_PORT = "12323"
 CONSOLE_TCP = 18890
@@ -93,8 +94,8 @@ def build():
         # The image's rc script only retries the mount in the background.
         "/sbin/mount | grep -q ' on /share ' || /sbin/mount /share",
         "rm -rf /tmp/virtio_serial.IP28 /tmp/vstest",
-        "cd /share/driver && smake 2>&1 | tail -20",
-        "cd /share/tests/guest && cc -n32 -I/share/driver -o /tmp/vstest vstest.c 2>&1",
+        "cd /share/irix/virtio_serial && smake 2>&1 | tail -20",
+        "cd /share/irix/virtio_serial/tests && cc -n32 -I/share/irix/virtio_serial -o /tmp/vstest vstest.c 2>&1",
         f"ls -l {MODULE} {VSTEST}",
     )
     check("build driver and test program", rc == 0 and "Cannot access" not in out, out)

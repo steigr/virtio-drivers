@@ -1,0 +1,99 @@
+# macos/virtio_vsock: builds the kext for PowerPC Mac OS X in the Panther guest beside the macosx-ppc runner, packages
+# it as Installer packages, checks them in the guest, and publishes kexts and packages twice: to this
+# organisation's generic package registry (PACKAGE in macos/virtio_vsock/component.sh, as <VERSION>.<run number> and
+# latest), and to the update publisher (updates.the update publisher/<PACKAGE>/), which keeps no appcast for a kext.
+#
+# The runner is forgejo-runner/macos-panther: a host runner with ssh to the guest and the guest's
+# disk shared at /share. Both uploads authenticate with the job's ID token, so nothing secret is configured:
+# the registry through the Authorized Integration whose audience is the organisation variable AUD
+# (write:package), the publisher through its policy for this repository and workflow.
+name: macos/virtio_vsock
+on:
+  push:
+    branches: [main]
+    paths: ["macos/virtio_vsock/**", "macos/ci/**", "ci/**", ".forgejo/workflows/macos-virtio_vsock.yml"]
+  workflow_dispatch:
+
+enable-openid-connect: true
+
+# One Panther guest: never build two drivers in it at once.
+concurrency:
+  group: macos-panther
+  cancel-in-progress: false
+
+env:
+  DRIVER: macos/virtio_vsock
+
+jobs:
+  build:
+    runs-on: macosx-ppc
+    timeout-minutes: 120
+    steps:
+      - name: Clone
+        run: |
+          rm -rf src
+          git -c http.extraHeader="Authorization: bearer ${{ forgejo.token }}" \
+            clone --depth 1 "${{ forgejo.server_url }}/${{ forgejo.repository }}.git" src
+          git -C src fetch --quiet --depth 1 origin "${{ forgejo.sha }}" && git -C src checkout --quiet FETCH_HEAD
+          . "src/$DRIVER/component.sh"
+          sed -n 's/^VERSION *?= *//p' "src/$DRIVER/Makefile" | head -1 > version.txt
+          echo "$PACKAGE $(cat version.txt), commit $(git -C src rev-parse --short HEAD)"
+
+      - name: Build in the Panther guest
+        run: |
+          . "src/$DRIVER/component.sh"
+          export VERSION=$(cat version.txt)
+          for variant in $VARIANTS; do
+            echo "::group::$variant"
+            sh src/macos/ci/panther-build.sh "$variant" "src/$DRIVER" out
+            echo "::endgroup::"
+          done
+          ls -lR out | head -40
+
+      - name: Package
+        run: |
+          . "src/$DRIVER/component.sh"
+          export VERSION=$(cat version.txt)
+          sed "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "src/$DRIVER/package.json" > package.json
+          rm -rf dist; mkdir -p dist
+          for variant in $VARIANTS; do
+            rm -rf stage; mkdir -p stage/kexts
+            cp -R "out/$variant/$KEXT.kext" stage/kexts/
+            for e in $EXTRAS $EXTRAS_TOP; do cp "out/$variant/$e" stage/kexts/; done
+            MKPKG_BOM_VIA="$PWD/src/macos/ci/guest-mkbom.sh" python3 src/macos/ci/mkpkg.py package.json --src stage --out "pkg-$variant"
+            tar -C "pkg-$variant" -czf "dist/$PKG-$variant-$VERSION.pkg.tar.gz" "$PKG.pkg"
+            tar -C "out/$variant" -czf "dist/$PKG-$variant-$VERSION.kext.tar.gz" "$KEXT.kext" $EXTRAS $EXTRAS_TOP
+          done
+          ls -l dist
+
+      - name: Check the packages in the guest
+        run: |
+          job=check-$$
+          mkdir -p /share/$job && chmod 777 /share/$job
+          cp dist/*.pkg.tar.gz src/macos/ci/check-pkg.sh "src/$DRIVER/component.sh" /share/$job/
+          chmod 644 /share/$job/*
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -o LogLevel=ERROR \
+            macos@127.0.0.1 "sh -c 'sh /Volumes/share/$job/check-pkg.sh /Volumes/share/$job 2>&1; rc=\$?; rm -rf /Volumes/share/$job; exit \$rc'"
+
+      - name: Publish to the package registry
+        env:
+          AUD: ${{ vars.AUD }}
+        run: |
+          . "src/$DRIVER/component.sh"
+          version="$(cat version.txt).${{ forgejo.run_number }}"
+          PACKAGES_JWT=$(curl --fail -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$AUD" | jq -r .value)
+          echo "::add-mask::$PACKAGES_JWT"
+          export PACKAGES_JWT
+          # The files carry the Makefile's VERSION; the registry's version adds the run number.
+          sh src/ci/publish-package.sh "$PACKAGE" "$version" dist/*
+
+      - name: Publish to the update publisher
+        env:
+          APPCAST: "false"
+        run: |
+          . "src/$DRIVER/component.sh"
+          version="$(cat version.txt).${{ forgejo.run_number }}"
+          set -- dist/*.pkg.tar.gz dist/*.kext.tar.gz
+          archive=$1; shift
+          sh src/ci/publisher-client.sh "$PACKAGE" "$version" "$version" "$archive" "$@"

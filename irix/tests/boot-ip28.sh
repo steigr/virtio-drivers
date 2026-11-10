@@ -2,7 +2,7 @@
 # Boot an installed IP28 IRIX under iris with a virtio-serial device, this
 # repository as the guest's /share, and copy-on-write disk writes.
 #
-#   IRIS=path/to/iris tests/iris/boot-ip28.sh [workdir]
+#   IRIS=path/to/iris irix/tests/boot-ip28.sh [workdir]
 #
 # IRIS            iris built from the virtio-serial branch (required)
 # IRIX_INSTANCE   the installed system (default $HOME/Developer/irix-ip28):

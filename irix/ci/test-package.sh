@@ -1,11 +1,13 @@
 #!/bin/sh
-# Install a package with inst in the IRIX guest, check what landed, and remove it
-# again. Nothing is loaded: a build node should not run a driver under test, and
-# may not have the device.
+# Install a package with inst in the IRIX guest and check what landed. Nothing is
+# loaded: a build node should not run a driver under test, and may not have the
+# device.
 #
-# virtio_9p is not removed: the CI steps run on the 9p share (/share), and without the package the
-# guest cannot mount it again ("unknown filesystem type: 9p"), so the next job would fail. It
-# stays installed as the newer version; the module that is loaded now keeps running.
+# Neither package is removed afterwards. The CI steps run on the 9p share (/share), and
+# without virtio_9p the guest cannot mount it again ("unknown filesystem type: 9p"); the
+# guest agent's channel is virtio_serial. Each replaces its predecessor (p9fs, vioser), so
+# removing it would leave the guest with neither at its next boot. It stays installed as
+# the newer version; the module that is loaded now keeps running.
 #
 #   test-package.sh <virtio_serial|virtio_9p> <tardist>
 product=$1
@@ -20,11 +22,14 @@ virtio_serial)
 	obj=/usr/lib/virtio_serial/virtio_serial.o; sym=virtio_serial_init
 	files="/etc/init.d/virtio_serial"
 	links="/etc/rc2.d/S98virtio_serial /etc/rc0.d/K02virtio_serial"
+	old=vioser
+	keep=1
 	;;
 virtio_9p)
 	obj=/usr/lib/virtio_9p/virtio_9p.o; sym=virtio_9p_vfsops
 	files="/etc/init.d/virtio_9p /usr/etc/mount_9p"
 	links="/etc/rc2.d/S98virtio_9p /etc/rc0.d/K02virtio_9p"
+	old=p9fs
 	keep=1
 	;;
 *)
@@ -56,6 +61,11 @@ IP22) abi=N32 ;;
 esac
 /usr/bin/file $obj | cat
 /usr/bin/file $obj | grep "$abi" > /dev/null || fail "$obj is not $abi"
+# Its predecessor must be gone, or both modules would bind the device at boot.
+if [ -n "${old:-}" ] && /usr/sbin/versions -b $old 2>/dev/null | grep "^I  *$old " > /dev/null; then
+	fail "$old is still installed beside $product"
+fi
+[ -z "${old:-}" ] || [ ! -f /etc/init.d/$old ] || fail "/etc/init.d/$old is still there"
 
 if [ -n "${keep:-}" ]; then
 	echo "PACKAGE TEST OK: $product (kept installed)"

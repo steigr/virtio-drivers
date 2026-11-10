@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """End-to-end test of the 9p filesystem: runs on the host against a guest started
-with tests/iris/boot-ip28.sh and P9_SHARE set, drives the guest over telnet, and
+with irix/tests/boot-ip28.sh and P9_SHARE set, drives the guest over telnet, and
 looks at the share from this side too.
 
-    tests/iris/run_9p_tests.py SHARE [--mb N] [--quick] [--readonly]
+    irix/virtio_9p/tests/run_tests.py SHARE [--mb N] [--quick] [--readonly]
 
 SHARE is the host directory given as P9_SHARE; its contents are this test's to
 create and remove.  Empty it rather than recreating it: iris holds the directory
@@ -19,11 +19,12 @@ import sys
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-IRIS_SRC = os.environ.get("IRIS_SRC", os.path.join(os.path.dirname(ROOT), "iris"))
+# irix/iris, beside this repository: {virtualization/virtio-drivers,irix/iris}
+IRIS_SRC = os.environ.get("IRIS_SRC", os.path.normpath(os.path.join(ROOT, "..", "..", "..", "irix", "iris")))
 IRIX_SH = os.path.join(IRIS_SRC, "tools", "irix-sh.py")
 TELNET_PORT = "12323"
-MODULE = "/tmp/virtio_serial.IP28/mod/virtio_9p.o"
-MOUNT_9P = "/tmp/virtio_serial.IP28/mount_9p"
+MODULE = "/tmp/virtio_9p.IP28/mod/virtio_9p.o"
+MOUNT_9P = "/tmp/virtio_9p.IP28/mount_9p"
 MNT = "/mnt9p"
 TEST = "/tmp/p9test"
 
@@ -49,9 +50,9 @@ def check(name, ok, detail=""):
 def build():
     rc, out = guest(
         "/sbin/mount | grep -q ' on /share ' || /sbin/mount /share",
-        "rm -rf /tmp/virtio_serial.IP28 /tmp/p9test*",
-        "cd /share/driver && smake > /tmp/9b.log 2>&1; tail -3 /tmp/9b.log",
-        "cd /share/tests/guest; for a in n32 64 32; do cc -$a -o /tmp/p9test.$a p9test.c 2>&1; done",
+        "rm -rf /tmp/virtio_9p.IP28 /tmp/p9test*",
+        "cd /share/irix/virtio_9p && smake > /tmp/9b.log 2>&1; tail -3 /tmp/9b.log",
+        "cd /share/irix/virtio_9p/tests; for a in n32 64 32; do cc -$a -o /tmp/p9test.$a p9test.c 2>&1; done",
         f"cp /tmp/p9test.n32 {TEST}",
         f"cp {MOUNT_9P} /usr/etc/mount_9p; mkdir -p {MNT}",
         f"ls -l {MODULE} {TEST}",
@@ -216,13 +217,14 @@ def test_exec_and_build(share):
     # the NFS /share cannot do.
     dest = os.path.join(share, "src")
     shutil.rmtree(dest, ignore_errors=True)
-    shutil.copytree(os.path.join(ROOT, "driver"), dest)
+    for part in ("virtio", "virtio_9p"):
+        shutil.copytree(os.path.join(ROOT, part), os.path.join(dest, part))
     with open(os.path.join(dest, "hello.c"), "w") as f:
         f.write('#include <stdio.h>\nint main(void){printf("ran from 9p\\n");return 0;}\n')
     rc, out = guest(f"cd {MNT}/src && cc -n32 -o hello hello.c 2>&1 && ./hello", timeout=300)
     check("compile on the share and exec the result", "ran from 9p" in out, out)
     # Compiling is what stresses it: many small files, seeks, and ld's mmap.
-    rc, out = guest(f"cd {MNT}/src && smake OBJDIR={MNT}/src/obj > /tmp/9sb.log 2>&1; echo rc=$?; tail -3 /tmp/9sb.log",
+    rc, out = guest(f"cd {MNT}/src/virtio_9p && smake OBJDIR={MNT}/src/obj > /tmp/9sb.log 2>&1; echo rc=$?; tail -3 /tmp/9sb.log",
                     f"ls -l {MNT}/src/obj/mod/virtio_9p.o", timeout=900)
     check("smake of this driver on the share", "rc=0" in out and "virtio_9p.o" in out, out)
     if os.path.exists(os.path.join(dest, "obj", "mod", "virtio_9p.o")):

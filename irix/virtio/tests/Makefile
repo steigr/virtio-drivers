@@ -1,22 +1,17 @@
-# Host tests of the driver's kernel-independent code.
+# Host test of the split rings, the transport layer's kernel-independent code.
 CC ?= cc
 CFLAGS ?= -std=c99 -Wall -Wextra -Werror -g -O1 -fsanitize=address,undefined
-CPPFLAGS += -I../../driver
+CPPFLAGS += -I..
 OUT ?= /tmp/virtio-host-tests
 
-test: $(OUT)/test_virtq $(OUT)/test_p9
+test: $(OUT)/test_virtq
 	$(OUT)/test_virtq
-	$(OUT)/test_p9
 
-$(OUT)/test_virtq: test_virtq.c ../../driver/virtq.c ../../driver/virtq.h
+$(OUT)/test_virtq: test_virtq.c ../virtq.c ../virtq.h
 	mkdir -p $(OUT)
-	$(CC) $(CFLAGS) $(CPPFLAGS) -o $@ test_virtq.c ../../driver/virtq.c
-
-$(OUT)/test_p9: test_p9.c ../../driver/p9.c ../../driver/p9.h
-	mkdir -p $(OUT)
-	$(CC) $(CFLAGS) $(CPPFLAGS) -o $@ test_p9.c ../../driver/p9.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) -o $@ test_virtq.c ../virtq.c
 
 clean:
-	rm -rf $(OUT)
+	rm -f $(OUT)/test_virtq
 
 .PHONY: test clean

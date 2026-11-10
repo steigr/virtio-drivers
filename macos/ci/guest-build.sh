@@ -1,10 +1,10 @@
 #!/bin/sh
 # Runs in the Panther guest: guest-build.sh <variant> <share job dir>
 #
-# The component (ci/component.sh) says what is built; the share job dir holds src.tgz, side-toolkit.sh and
+# The component (the driver's component.sh) says what is built; the share job dir holds src.tgz, side-toolkit.sh and
 # component.sh.
 #
-# variant   gcc2-10.0   GCC 2.95.2 with the 10.0 toolkit's headers    (/opt/toolkit-10.0, ci/side-toolkit.sh)
+# variant   gcc2-10.0   GCC 2.95.2 with the 10.0 toolkit's headers    (/opt/toolkit-10.0, side-toolkit.sh)
 #           gcc2-10.1   GCC 2.95.2 with the 10.1 toolkit's headers    (/opt/toolkit-10.1)
 #           gcc3-10.3   Panther's own GCC 3.3 and headers             (covers 10.2 and 10.3 in the ladder)
 #

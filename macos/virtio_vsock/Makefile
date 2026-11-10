@@ -1,7 +1,7 @@
 # Builds VirtioVsock.kext inside a Mac OS X guest, with that guest's own Developer Tools. On PowerPC
-# the way ../ppc/virtioconsole is built (see its Makefile for where every compiler flag comes from and
+# the way ../virtio_console is built (see its Makefile for where every compiler flag comes from and
 # the failure behind each); on Intel against the kernel programming interfaces of 10.4 on, as
-# ../virtionet is:
+# ../virtio_net is:
 #
 #   make ABI=gcc2   on 10.1 with the December 2001 tools (GCC 2.95): for 10.0 and 10.1, PowerPC
 #   make ABI=gcc3   on 10.2 with the December 2002 tools (GCC 3):    for 10.2 and 10.3, PowerPC
@@ -30,14 +30,14 @@ CXXFLAGS = $(CFLAGS) -fno-rtti -fno-exceptions -fcheck-new $(CXXFLAGS_$(ABI))
 # OSBundleLibraries come from libraries-$(ABI).xml, as VirtioConsole's, without a family of its own:
 # the driver is an IOService on IOPCIFamily with an IOUserClient, both in IOKit proper. No
 # com.apple.kernel.bsd: the driver uses no BSD symbol, and no one version of it satisfies both 10.0
-# and 10.1 (../virtio9p).
+# and 10.1 (macos/virtio9p).
 
 BUILD = build/$(ABI)
 KEXT  = $(BUILD)/VirtioVsock.kext
 
 all: $(KEXT) tools
 
-# The Intel build, as VirtioNet's (../virtionet/Makefile says where each choice comes from): one
+# The Intel build, as VirtioNet's (../virtio_net/Makefile says where each choice comes from): one
 # binary of two slices against the KPIs 10.4 introduced (libraries-kpi.xml, 8.0.0: Darwin 8).
 #   i386, GCC 4.0 and the 10.4u SDK: the 32-bit kernels of 10.4 to 10.7, a relocatable object (-r).
 #   x86_64, GCC 4.2 and the 10.6 SDK: the 64-bit kernels of 10.6 on, a kext bundle (-Xlinker -kext).
@@ -88,7 +88,7 @@ build/intel/vsockcat: vsock.c vsock.h vsockcat.c VirtioVsockUser.h
 
 # What the Intel releases are given, by the oldest release each serves, as VirtioNet's: 10.6/ the
 # universal kext, 10.4/ its i386 slice alone (10.5 refuses a universal kext whose x86_64 slice is a
-# kext bundle; ../virtionet/Makefile).
+# kext bundle; ../virtio_net/Makefile).
 #   make ABI=kpi intel
 intel: $(KEXT) build/intel/vsockcat
 	rm -rf build/intel/10.4 build/intel/10.6

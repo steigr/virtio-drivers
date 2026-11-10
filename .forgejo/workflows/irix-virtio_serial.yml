@@ -1,0 +1,116 @@
+# irix/virtio_serial: on the irix runner, the IRIX guest compiles the virtio-serial driver for IP22, IP28,
+# IP30 and IP35, runs gendist and installs the package with inst. The runner then publishes it twice: as the
+# generic package irix_virtio_serial of this organisation (under its version and latest), and to the
+# update publisher (irix.the update publisher). Both authenticate with the job's ID token, so nothing secret is
+# configured: the registry through the Authorized Integration whose audience is the organisation variable
+# AUD (write:package), the publisher through its policy for this repository and workflow.
+#
+# The version is an integer, as inst needs: the commit's UTC date and its number that day, such as 2026111001.
+name: irix/virtio_serial
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: "Runner label: irix = either machine, irix-runner or irix-runner = that one"
+        required: false
+        default: irix
+  push:
+    branches: [main]
+    paths: ["irix/virtio_serial/**", "irix/virtio/**", "irix/ci/**", "ci/**", ".forgejo/workflows/irix-virtio_serial.yml"]
+
+# One guest console: never run two IRIX builds at once.
+concurrency:
+  group: irix-guest
+  cancel-in-progress: false
+
+enable-openid-connect: true
+
+env:
+  DRIVER: virtio_serial
+  PACKAGE: irix_virtio_serial
+  CHANGELOG_PATHS: "irix/virtio_serial irix/virtio"
+
+jobs:
+  package:
+    # The runner fetches and uploads; the IRIX guest builds and tests. The runner's
+    # workspace is under /share, so both see the same files.
+    runs-on: ${{ github.event.inputs.runner || 'irix' }}
+    env:
+      IRIX_TIMEOUT: 7200
+    timeout-minutes: 60
+    steps:
+      - name: Fetch this repository
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          rm -rf self out
+          # A header, so the job's token stays out of .git/config, which the guest can read.
+          auth=$(printf 'x-access-token:%s' "$TOKEN" | base64 | tr -d '\n')
+          git -c "http.extraHeader=Authorization: Basic $auth" \
+            clone --quiet "${{ github.server_url }}/${{ github.repository }}.git" self
+          git -C self checkout --quiet "${{ github.sha }}"
+
+      - name: Work out the version
+        run: |
+          set -eu
+          cd self
+          export TZ=UTC
+          day=$(git log -1 --format=%cd --date=format-local:%Y%m%d)
+          nth=$(git log --format=%cd --date=format-local:%Y%m%d | grep -c "^$day\$")
+          printf '%s%02d\n' "$day" "$nth" | tee ../version.txt
+
+      - name: Wait for the guest
+        run: |
+          # Steps run over ssh (irix-sh) when the runner has the guest's key; else the console
+          # needs a login first (after a pod restart it sits at a login prompt).
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if [ -r "${IRIS_SSH_DIR:-/run/iris/ssh}/id_ed25519" ]; then
+              irix-ssh true && exit 0
+            else
+              iris-ci login && exit 0
+            fi
+            sleep 30
+          done
+          echo "the guest did not come up"; exit 1
+
+      - name: Build the inst package (guest)
+        shell: irix-sh {0}
+        run: |
+          set -e
+          sh self/irix/ci/build-package.sh virtio_serial `cat version.txt` "`pwd`/out"
+
+      - name: Install virtio_serial (guest), and keep it
+        shell: irix-sh {0}
+        run: |
+          set -e
+          sh self/irix/ci/test-package.sh virtio_serial "`pwd`/out/virtio_serial-`cat version.txt`.tardist"
+
+      - name: Publish to the package registry
+        env:
+          AUD: ${{ vars.AUD }}
+        run: |
+          set -eu
+          ver=$(cat version.txt)
+          PACKAGES_JWT=$(curl --fail -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$AUD" | jq -r .value)
+          echo "::add-mask::$PACKAGES_JWT"
+          export PACKAGES_JWT
+          sh self/ci/publish-package.sh "$PACKAGE" "$ver" "out/$DRIVER-$ver.tardist"
+
+      - name: Publish to the update publisher
+        # irix.the update publisher: the publisher stores it in the landing pages' layout, without an appcast. The
+        # changelog (irix/ci/changelog.sh) is the published one with an entry for this build on top.
+        env:
+          APPCAST: "false"
+        run: |
+          set -eu
+          ver=$(cat version.txt)
+          tardist="out/$DRIVER-$ver.tardist"
+          if sh self/irix/ci/changelog.sh "$PACKAGE" "$ver" self >CHANGELOG.md; then
+            CHANGELOG=CHANGELOG.md sh self/ci/publisher-client.sh "$PACKAGE" "$ver" "$ver" "$tardist"
+          else
+            echo "changelog: none for $PACKAGE $ver, the published one stays"
+            sh self/ci/publisher-client.sh "$PACKAGE" "$ver" "$ver" "$tardist"
+          fi

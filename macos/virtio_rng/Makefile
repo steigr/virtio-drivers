@@ -1,5 +1,5 @@
 # Builds VirtioRand.kext inside a PowerPC Mac OS X guest, with that guest's own Developer Tools,
-# the way ../virtioconsole is built (see its Makefile for where every compiler flag comes from and
+# the way ../virtio_console is built (see its Makefile for where every compiler flag comes from and
 # the failure behind each):
 #
 #   make ABI=gcc2   on 10.1 with the December 2001 tools (GCC 2.95): for 10.0 and 10.1
@@ -32,7 +32,7 @@ CXXFLAGS = $(CFLAGS) -fno-rtti -fno-exceptions -fcheck-new $(CXXFLAGS_$(ABI))
 
 # OSBundleLibraries come from libraries-$(ABI).xml, as VirtioConsole's, without IOSerialFamily: the driver
 # is an IOService on IOPCIFamily and nothing more. No com.apple.kernel.bsd although it calls the BSD
-# kernel's random_write: no one version of it satisfies both 10.0 and 10.1 (../../virtio9p), and
+# kernel's random_write: no one version of it satisfies both 10.0 and 10.1 (macos/virtio9p), and
 # virtio9p shows the symbols resolve without the declaration.
 
 BUILD = build/$(ABI)

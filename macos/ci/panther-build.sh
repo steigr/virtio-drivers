@@ -1,5 +1,8 @@
 #!/bin/sh
-# On the Forgejo runner beside the Panther guest: panther-build.sh <variant> <source dir> <out dir>
+# On the Forgejo runner beside the Panther guest: panther-build.sh <variant> <driver dir> <out dir>
+#
+# <driver dir> is one of macos/<driver>, with its Makefile and component.sh; the guest-side scripts come
+# from this directory.
 #
 # Puts the source on the 9p share (the runner's /share is the guest's /Volumes/share), has the guest build it
 # over ssh (127.0.0.1:22, the pod's key from the ssh-agent), and takes the result back. The guest's login
@@ -25,7 +28,8 @@ cleanup() {
 }
 trap cleanup EXIT
 tar -C "$src" --exclude=.git --exclude=build -czf "$share/src.tgz" .
-cp "$src/ci/side-toolkit.sh" "$src/ci/guest-build.sh" "$src/ci/component.sh" "$share/"
+ci=$(cd "$(dirname "$0")" && pwd)
+cp "$ci/side-toolkit.sh" "$ci/guest-build.sh" "$src/component.sh" "$share/"
 mkdir -p "$share/out"
 chmod 777 "$share/out"
 
