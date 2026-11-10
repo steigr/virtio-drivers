@@ -1,0 +1,11 @@
+{
+  "name": "VirtioRand",
+  "identifier": "io.virtio.virtio-rand",
+  "version": "0.0.0",
+  "title": "Virtio RNG",
+  "description": "virtio-rng feeding /dev/random.",
+  "restart": "required",
+  "files": [
+    {"srcdir": "kexts/VirtioRand.kext", "dest": "/System/Library/Extensions/VirtioRand.kext", "filemode": "0644"}
+  ]
+}

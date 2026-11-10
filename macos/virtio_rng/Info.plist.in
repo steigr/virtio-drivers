@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>English</string>
+	<key>CFBundleExecutable</key>
+	<string>VirtioRand</string>
+	<key>CFBundleIdentifier</key>
+	<string>io.virtio.driver.VirtioRand</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>VirtioRand</string>
+	<key>CFBundlePackageType</key>
+	<string>KEXT</string>
+	<key>CFBundleShortVersionString</key>
+	<string>@VERSION@</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleVersion</key>
+	<string>@VERSION@</string>
+	<key>IOKitPersonalities</key>
+	<dict>
+		<!-- QEMU's virtio entropy device: virtio-rng-pci (1af4:1005, legacy or transitional).
+		     By vendor and device where IOPCIFamily matches IOPCIMatch, and by the name OpenBIOS
+		     gives the node where it matches names, as VirtioConsole's pci1af4,1003.
+		     IntervalMS: how often, once primed, the driver takes Bytes bytes from the device and
+		     mixes them into the kernel's /dev/random generator. -->
+		<key>VirtioRand</key>
+		<dict>
+			<key>CFBundleIdentifier</key>
+			<string>io.virtio.driver.VirtioRand</string>
+			<key>IOClass</key>
+			<string>io_virtio_VirtioRand</string>
+			<key>IOPCIMatch</key>
+			<string>0x10051af4</string>
+			<key>IOProviderClass</key>
+			<string>IOPCIDevice</string>
+			<key>IntervalMS</key>
+			<integer>10000</integer>
+		</dict>
+		<key>VirtioRandByName</key>
+		<dict>
+			<key>CFBundleIdentifier</key>
+			<string>io.virtio.driver.VirtioRand</string>
+			<key>IOClass</key>
+			<string>io_virtio_VirtioRand</string>
+			<key>IONameMatch</key>
+			<string>pci1af4,1005</string>
+			<key>IOProviderClass</key>
+			<string>IOPCIDevice</string>
+			<key>IntervalMS</key>
+			<integer>10000</integer>
+		</dict>
+	</dict>
+	<key>OSBundleLibraries</key>
+	<dict>
+@LIBRARIES@
+	</dict>
+</dict>
+</plist>
