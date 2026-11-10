@@ -1,0 +1,11 @@
+{
+  "name": "VirtioConsole",
+  "identifier": "io.virtio.virtio-console",
+  "version": "0.0.0",
+  "title": "Virtio Console",
+  "description": "virtio serial driver: /dev/cu.virtio-N, the guest agent's channel.",
+  "restart": "required",
+  "files": [
+    {"srcdir": "kexts/VirtioConsole.kext", "dest": "/System/Library/Extensions/VirtioConsole.kext", "filemode": "0644"}
+  ]
+}

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>English</string>
+	<key>CFBundleExecutable</key>
+	<string>VirtioConsole</string>
+	<key>CFBundleIdentifier</key>
+	<string>io.virtio.driver.VirtioConsole</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>VirtioConsole</string>
+	<key>CFBundlePackageType</key>
+	<string>KEXT</string>
+	<key>CFBundleShortVersionString</key>
+	<string>@VERSION@</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleVersion</key>
+	<string>@VERSION@</string>
+	<key>IOKitPersonalities</key>
+	<dict>
+		<!-- QEMU's legacy virtio console: virtio-serial-pci,disable-modern=on (1af4:1003). By
+		     vendor and device where IOPCIFamily matches IOPCIMatch, and by the name OpenBIOS
+		     gives the node where it matches names: 10.0's and 10.1's registries both list it as
+		     pci1af4,1003. -->
+		<key>VirtioConsole</key>
+		<dict>
+			<key>CFBundleIdentifier</key>
+			<string>io.virtio.driver.VirtioConsole</string>
+			<key>IOClass</key>
+			<string>io_virtio_VirtioConsole</string>
+			<key>IOPCIMatch</key>
+			<string>0x10031af4</string>
+			<key>IOProviderClass</key>
+			<string>IOPCIDevice</string>
+		</dict>
+		<key>VirtioConsoleByName</key>
+		<dict>
+			<key>CFBundleIdentifier</key>
+			<string>io.virtio.driver.VirtioConsole</string>
+			<key>IOClass</key>
+			<string>io_virtio_VirtioConsole</string>
+			<key>IONameMatch</key>
+			<string>pci1af4,1003</string>
+			<key>IOProviderClass</key>
+			<string>IOPCIDevice</string>
+		</dict>
+	</dict>
+	<key>OSBundleLibraries</key>
+	<dict>
+@LIBRARIES@
+	</dict>
+</dict>
+</plist>
