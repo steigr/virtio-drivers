@@ -87,8 +87,9 @@ enum {
     kStrayLogMax       = 5,             /* stray interrupts logged, then counted only */
     kWatchdogMS        = 50,            /* and when interrupts carry the work */
     kQuietTicksMax     = 2,             /* watchdog ticks with unannounced work before a recovery */
-    kRecoveriesMax     = 5,             /* recoveries in a row with no interrupt between, before polling */
+    kRecoveriesMax     = 5,             /* recoveries in a row with no interrupt between: see timeoutOccurred */
     kRecoveryLogMax    = 5,             /* recoveries logged, then counted only */
+    kDroughtLogMax     = 5,             /* droughts logged, then counted only */
     kStallMS           = 5000           /* requests out this long with no completion are logged */
 };
 
@@ -530,7 +531,7 @@ void io_virtio_VirtioBlock::service()
  * one does) that the interrupt has not been missed. */
 void io_virtio_VirtioBlock::armTimer()
 {
-    UInt32 ms = !fPolled ? kWatchdogMS : (BUSY() ? kPollMS : kIdleAckMS);
+    UInt32 ms = fPolled ? (BUSY() ? kPollMS : kIdleAckMS) : (fDrought ? kPollMS : kWatchdogMS);
 
     if (fTimerArmed) {
         if (ms >= fTimerMS)
@@ -636,7 +637,16 @@ void io_virtio_VirtioBlock::interruptDetach()
  * 2026-10-14 and again with 0.2.4 the next day, Leopard's and Mountain Lion's to High Sierra's
  * system disks took thousands of interrupts (4126, 8660, 11543) and then one did not come, the
  * device's ISR still 0x1: a lost one, on a line q35 shares among the system disk, Virtio9P and the
- * gauntlet's second disk, not a line that was never routed. */
+ * gauntlet's second disk, not a line that was never routed.
+ *
+ * Up to 0.2.7 five recoveries in a row turned polling on for good, whatever the line had carried
+ * before. Leopard's system disk did so after 2997 interrupts taken and 12 recovered from (leopard2,
+ * two CPUs, 2026-11-13): a stretch in which interrupts came seldom -- 2993, 2994, 2995 at the
+ * logged recoveries -- and then came again, to the second disk among others. A line that has
+ * carried an interrupt is routed, and losing several in a row is a drought in their delivery, not
+ * their absence: since 0.2.8 such a drought has the watchdog look every kPollMS until an interrupt
+ * comes, and then go back to kWatchdogMS, still interrupt-driven. Only a line that never carried
+ * one turns polling on. */
 void io_virtio_VirtioBlock::timeoutOccurred()
 {
     fTimerArmed = false;
@@ -645,20 +655,34 @@ void io_virtio_VirtioBlock::timeoutOccurred()
     if (fPolled)
         ackInterrupt();
     if (!fPolled) {
-        if (fInterrupts != fInterruptsSeen)
+        if (fInterrupts != fInterruptsSeen) {
             fRecoveries = 0;    /* interrupts came since the last recovery */
+            if (fDrought) {
+                fDrought = false;
+                if (fDroughts <= kDroughtLogMax)
+                    IOLog("VirtioBlock: interrupts come again (%u taken, %u recovered from); the watchdog is back to %d ms\n",
+                          (unsigned) fInterrupts, (unsigned) fRecovered, kWatchdogMS);
+            }
+        }
         if (fLastUsed != *fUsedIdx && fInterrupts == fInterruptsSeen) {
             if (++fQuietTicks >= kQuietTicksMax) {
                 UInt8 isr = rd8(kVirtioISR);    /* lowers the line */
 
                 fQuietTicks = 0;
                 fRecovered++;
-                if (++fRecoveries >= kRecoveriesMax) {
+                if (++fRecoveries >= kRecoveriesMax && fInterrupts == 0) {
                     IOLog("VirtioBlock: completions raise no interrupt (%u taken, %u recovered from); polling every %d ms instead\n",
                           (unsigned) fInterrupts, (unsigned) fRecovered, kPollMS);
                     interruptDetach();
                     fPolled = true;
                     *fAvailFlags = kAvailNoInterrupt;
+                } else if (fRecoveries >= kRecoveriesMax) {
+                    if (!fDrought) {
+                        fDrought = true;
+                        if (++fDroughts <= kDroughtLogMax)
+                            IOLog("VirtioBlock: %u interrupts in a row were lost (%u taken, %u recovered from); the watchdog looks every %d ms until one comes\n",
+                                  (unsigned) fRecoveries, (unsigned) fInterrupts, (unsigned) fRecovered, kPollMS);
+                    }
                 } else if (fRecovered <= kRecoveryLogMax)
                     IOLog("VirtioBlock: an interrupt was lost (ISR 0x%x, %u taken); recovered, still interrupt-driven\n",
                           isr, (unsigned) fInterrupts);
