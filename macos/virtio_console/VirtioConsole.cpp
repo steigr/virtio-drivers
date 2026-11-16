@@ -181,8 +181,7 @@ bool io_virtio_VirtioConsole::queueSetup(Virtq *q, UInt16 index, UInt32 bufSize,
         return false;
     bzero(q->bufs, q->bufsSize);
     for (i = 0; i < bufCount; i++) {
-        q->desc[i].addrHigh = 0;
-        q->desc[i].addrLow  = q->bufsPhys + i * bufSize;
+        q->desc[i].addr     = (UInt64) (q->bufsPhys + i * bufSize);
         q->desc[i].len      = bufSize;
         q->desc[i].flags    = deviceWrites ? kDescWrite : 0;
         q->desc[i].next     = 0;

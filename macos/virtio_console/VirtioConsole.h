@@ -42,11 +42,13 @@
 
 /* A split virtqueue, legacy layout: descriptors, then the available ring, then -- on the next
  * page -- the used ring, in one physically contiguous allocation whose page number the device is
- * given. Legacy virtio on a big-endian guest keeps the rings in the guest's byte order, so nothing
- * here is swapped. */
+ * given. Legacy virtio keeps the rings in the guest's byte order, so nothing here is swapped -- and
+ * the address is one 64-bit field in that order, not two 32-bit halves: as high word then low, it
+ * was right on big-endian PowerPC and, on Intel, gave the device the buffer's address shifted 32
+ * bits up, so that the queues came up and no byte moved (tiger2, run 2026-11-16-b5ce445-console:
+ * the agent served /dev/cu.virtio-0 and every request timed out). As VirtioNet's. */
 struct VirtqDesc {
-    UInt32 addrHigh;
-    UInt32 addrLow;
+    UInt64 addr;
     UInt32 len;
     UInt16 flags;
     UInt16 next;
