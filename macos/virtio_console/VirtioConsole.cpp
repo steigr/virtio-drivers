@@ -100,9 +100,15 @@ static int consoleIndex(IOPCIDevice *me)
 
 static inline UInt32 roundPage(UInt32 n) { return (n + kPage - 1) & ~(UInt32)(kPage - 1); }
 
-/* Orders memory the device reads against the register write that tells it to. PowerPC's sync;
- * GCC 2.95 and 3 both take this spelling. */
+/* Orders memory the device reads against the register write that tells it to. PowerPC's sync,
+ * which GCC 2.95 and 3 both take in this spelling; on Intel mfence, as VirtioNet's. */
+#if defined(__ppc__)
 static inline void barrier() { __asm__ __volatile__ ("sync" : : : "memory"); }
+#elif defined(__i386__)
+static inline void barrier() { __asm__ __volatile__ ("mfence" : : : "memory"); }
+#else
+#error "VirtioConsole knows PowerPC and 32-bit Intel: its descriptors carry 32-bit addresses"
+#endif
 
 /* ------------------------------------------------------------------------------------------ */
 /* the device                                                                                  */

@@ -1,7 +1,10 @@
 # Builds VirtioConsole.kext inside a PowerPC Mac OS X guest, with that guest's own Developer Tools:
 #
 #   make ABI=gcc2   on 10.1 with the December 2001 tools (GCC 2.95): for 10.0 and 10.1
-#   make ABI=gcc3   on 10.2 with the December 2002 tools (GCC 3):    for 10.2 on
+#   make ABI=gcc3   on 10.2 with the December 2002 tools (GCC 3):    for 10.2 on, PowerPC
+#   make ABI=kpi    on 10.6 with Xcode 3.2.6:                       for 10.4 and 10.5, Intel
+#
+# `make ABI=kpi intel` also leaves build/intel/10.4/VirtioConsole.kext, as VirtioNet's layout has it.
 #
 # The two compilers' C++ ABIs differ and a kernel extension links against the kernel's, so one
 # binary cannot serve both. The flags are what Project Builder's kernel-extension rules pass
@@ -44,6 +47,34 @@ KEXT  = $(BUILD)/VirtioConsole.kext
 
 all: $(KEXT)
 
+# The Intel build, as VirtioNet's, against the KPIs 10.4 introduced (libraries-kpi.xml, 8.0.0), with
+# GCC 4.0 and the 10.4u SDK: a relocatable object (-r), as 10.4 and 10.5 load kexts. i386 alone, the
+# 32-bit kernels of 10.4 to 10.7: the descriptors and the queue's page number are written as 32-bit
+# physical addresses, which a 64-bit kernel's contiguous memory need not fit.
+KPI_SDKS     ?= $(firstword $(wildcard /Developer/SDKs /SDKs))
+KPI_CC_I386  ?= gcc-4.0
+KPI_SDK_I386 ?= $(KPI_SDKS)/MacOSX10.4u.sdk
+KPI_CFLAGS   = -fno-common -nostdinc -fno-builtin -finline -fno-keep-inline-functions -O2 -Wall -static \
+               -DKERNEL -DAPPLE -DNeXT -DVIRTIOCONSOLE_VERSION='"$(VERSION)"'
+KPI_CXXFLAGS = -x c++ $(KPI_CFLAGS) -fno-rtti -fno-exceptions -fcheck-new -fapple-kext
+KPI_HEADERS  = -I$(KPI_SDK_I386)/System/Library/Frameworks/Kernel.framework/Headers
+
+ifeq ($(ABI),kpi)
+$(BUILD)/VirtioConsole: VirtioConsole.cpp VirtioConsole.h VirtioConsole_info.c
+	mkdir -p $(BUILD)
+	$(KPI_CC_I386) -arch i386 -mmacosx-version-min=10.4 $(KPI_CXXFLAGS) $(KPI_HEADERS) -c VirtioConsole.cpp -o $(BUILD)/VirtioConsole.o
+	$(KPI_CC_I386) -arch i386 -mmacosx-version-min=10.4 $(KPI_CFLAGS) $(KPI_HEADERS) -c VirtioConsole_info.c -o $(BUILD)/VirtioConsole_info.o
+	$(KPI_CC_I386) -arch i386 -isysroot $(KPI_SDK_I386) -static -nostdlib -r -o $@ \
+	   $(BUILD)/VirtioConsole_info.o $(BUILD)/VirtioConsole.o -lkmodc++ -lkmod -lcc_kext
+endif
+
+#   make ABI=kpi intel
+intel: $(KEXT)
+	rm -rf build/intel
+	mkdir -p build/intel/10.4
+	cp -R $(KEXT) build/intel/10.4/
+
+ifneq ($(ABI),kpi)
 $(BUILD)/VirtioConsole.o: VirtioConsole.cpp VirtioConsole.h
 	mkdir -p $(BUILD)
 	cc $(CXXFLAGS) -x c++ -c VirtioConsole.cpp -o $@
@@ -60,6 +91,7 @@ $(BUILD)/VirtioConsole_info.o: VirtioConsole_info.c
 $(BUILD)/VirtioConsole: $(BUILD)/VirtioConsole.o $(BUILD)/VirtioConsole_info.o
 	cc -arch ppc -static -nostdlib -r -o $@ $(BUILD)/VirtioConsole_info.o $(BUILD)/VirtioConsole.o \
 	   $(addprefix -L,$(KMOD_LIB_DIR)) -lkmodc++ -lkmod -lcc_kext
+endif
 
 # The bundle. perl rather than sed: 10.1's sed cannot put a file's lines into a replacement.
 # The comments of Info.plist.in are dropped from the built plist: BootX, which loads the kexts a boot
@@ -74,4 +106,4 @@ $(KEXT): $(BUILD)/VirtioConsole Info.plist.in libraries-$(ABI).xml
 clean:
 	rm -rf build
 
-.PHONY: all clean
+.PHONY: all clean intel
