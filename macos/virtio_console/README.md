@@ -1,6 +1,6 @@
 # virtio_console for Mac OS X
 
-`VirtioConsole.kext` 0.2.0, for `virtio-serial-pci, legacy console port`. The legacy virtio console as a serial port, `/dev/cu.virtio-0`: the PowerPC guest agent's channel, needing neither network nor USB.
+`VirtioConsole.kext` 0.3.0, for `virtio-serial-pci, legacy console port`. The legacy virtio console as a serial port, `/dev/cu.virtio-0`: the PowerPC guest agent's channel, needing neither network nor USB.
 
 **Maturity:** **Stable** on PowerPC 10.0 to 10.3: interrupt-driven, the gauntlet's checks pass on releases installed from nothing. No Intel build.
 

@@ -17,6 +17,30 @@
 #define super IOSerialDriverSync
 OSDefineMetaClassAndStructors(io_virtio_VirtioConsole, IOSerialDriverSync)
 
+/* IOInterrupts.h has it from 10.5; the 10.4u SDK this is built with does not. */
+#ifndef kIOInterruptTypePCIMessaged
+#define kIOInterruptTypePCIMessaged 0x00010000
+#endif
+
+/* The provider's interrupt to take: a message-signalled one where the platform gave the device
+ * one, the line's otherwise. Mac OS X 10.5's IOPCIFamily adds an MSI vector after the line's
+ * (resolveMSIInterrupts, MSI and not MSI-X) to a device with an MSI capability, which QEMU's
+ * virtio-pci has with x-legacy-msi=on. A vector is the device's alone: no line to share or to land
+ * on the wrong IOAPIC pin. 10.4 adds none, and index 0 is the line, as before. */
+static int interruptIndex(IOService *provider, bool *messaged)
+{
+    int type, i;
+
+    *messaged = false;
+    for (i = 0; provider->getInterruptType(i, &type) == kIOReturnSuccess; i++) {
+        if (type & kIOInterruptTypePCIMessaged) {
+            *messaged = true;
+            return i;
+        }
+    }
+    return 0;
+}
+
 /* Legacy virtio PCI: the common header in the I/O BAR. IOPCIDevice's ioRead/ioWrite present PCI's
  * little-endian registers in the host's order. */
 enum {
@@ -431,10 +455,13 @@ bool io_virtio_VirtioConsole::start(IOService *provider)
     {
         OSBoolean *polled = OSDynamicCast(OSBoolean, getProperty("Polled"));
 
+        bool messaged = false;
+        int index = interruptIndex(provider, &messaged);
+
         fPolled = true;
         if (!(polled && polled->isTrue())) {
             fInterrupt = IOFilterInterruptEventSource::filterInterruptEventSource(this, interruptAction,
-                                                                                  interruptFilter, provider, 0);
+                                                                                  interruptFilter, provider, index);
             if (!fInterrupt || fWorkLoop->addEventSource(fInterrupt) != kIOReturnSuccess) {
                 IOLog("VirtioConsole: the device's interrupt cannot be had; polling every %d ms\n", kPollMS);
                 if (fInterrupt)
@@ -447,7 +474,7 @@ bool io_virtio_VirtioConsole::start(IOService *provider)
                 fInterrupt->enable();
             }
         }
-        IOLog("VirtioConsole: %s\n", fPolled ? "polled" : "interrupt-driven");
+        IOLog("VirtioConsole: %s\n", fPolled ? "polled" : messaged ? "interrupt-driven, on MSI" : "interrupt-driven");
     }
 
     /* The port, as IOSerialFamily's BSD client finds it: /dev/cu.virtio-N and /dev/tty.virtio-N,
