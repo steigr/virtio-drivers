@@ -73,10 +73,21 @@ enum {
 
 enum {
     kConfigCommand     = 0x04,
+    kConfigStatus      = 0x06,
     kConfigBAR0        = 0x10,
+    kConfigCapPtr      = 0x34,
     kCommandIO         = 0x0001,
-    kCommandBusMaster  = 0x0004
+    kCommandBusMaster  = 0x0004,
+    kPCIStatusCapList  = 0x0010,
+    kCapMSI            = 0x05,
+    kCapMSIX           = 0x11
 };
+
+/* Not in every release's headers: IOPCIFamily's MSI vectors, which 10.5's lists after the legacy
+ * one (IOPCIFamily-110's resolveMSIInterrupts). */
+#ifndef kIOInterruptTypePCIMessaged
+#define kIOInterruptTypePCIMessaged 0x00010000
+#endif
 
 static inline UInt32 roundPage(UInt32 n) { return (n + kPage - 1) & ~(UInt32)(kPage - 1); }
 
@@ -336,6 +347,46 @@ int io_virtio_Virtio9P::rpcGated(UInt32 tlen, UInt32 *rlen)
     return 0;
 }
 
+/* The device's PCI capability list holds id. */
+static bool hasCapability(IOPCIDevice *pci, UInt8 id)
+{
+    UInt8 at;
+    int n;
+
+    if (!(pci->configRead16(kConfigStatus) & kPCIStatusCapList))
+        return false;
+    at = pci->configRead8(kConfigCapPtr) & ~3;
+    for (n = 0; at && n < 48; n++) {
+        if (pci->configRead8(at) == id)
+            return true;
+        at = pci->configRead8(at + 1) & ~3;
+    }
+    return false;
+}
+
+/* Which of the provider's interrupts to take (0.3.0 on): a plain MSI vector where the device
+ * offers MSI and not MSI-X, else the legacy line, index 0. The point is Leopard, whose IOPCIFamily
+ * has no MSI-X (its lookup is #if 0) and whose legacy lines fall back to IOAPIC pins 10 and 11,
+ * where they share the AHCI's (TODO.md's "Every q35 PCI device's interrupt line holds its own APIC
+ * line"); QEMU gives the device plain MSI with x-legacy-msi=on (patches/qemu 0092) and vectors=0.
+ * MSI-X is never taken: enabled, it moves the legacy header's device configuration from 20 to 24,
+ * which this driver does not follow, so a device that has it stays on its line. Plain MSI leaves
+ * the header where it is, and the ISR is still read and cleared as on the line. */
+static int interruptIndex(IOPCIDevice *pci, bool *messaged)
+{
+    int type, i;
+
+    *messaged = false;
+    if (!hasCapability(pci, kCapMSI) || hasCapability(pci, kCapMSIX))
+        return 0;
+    for (i = 0; pci->getInterruptType(i, &type) == kIOReturnSuccess; i++)
+        if (type & kIOInterruptTypePCIMessaged) {
+            *messaged = true;
+            return i;
+        }
+    return 0;
+}
+
 /* At primary interrupt time: reading the ISR lowers the device's interrupt line. */
 bool io_virtio_Virtio9P::interruptFilter(OSObject *owner, IOFilterInterruptEventSource *)
 {
@@ -411,12 +462,15 @@ bool io_virtio_Virtio9P::start(IOService *provider)
     {
         OSBoolean *polled = OSDynamicCast(OSBoolean, getProperty("Polled"));
 
+        bool messaged = false;
+        int index = interruptIndex(fPCI, &messaged);
+
         fWorkLoop = IOWorkLoop::workLoop();
         if (fWorkLoop && !(polled && polled->isTrue())) {
             fGate = IOCommandGate::commandGate(this);
             fTimer = IOTimerEventSource::timerEventSource(this, timeoutAction);
             fInterrupt = IOFilterInterruptEventSource::filterInterruptEventSource(this, interruptAction,
-                                                                                  interruptFilter, provider, 0);
+                                                                                  interruptFilter, provider, index);
             if (!fGate || fWorkLoop->addEventSource(fGate) != kIOReturnSuccess ||
                 !fTimer || fWorkLoop->addEventSource(fTimer) != kIOReturnSuccess ||
                 !fInterrupt || fWorkLoop->addEventSource(fInterrupt) != kIOReturnSuccess) {
@@ -431,7 +485,7 @@ bool io_virtio_Virtio9P::start(IOService *provider)
                 fInterrupt->enable();
             }
         }
-        IOLog("Virtio9P: %s\n", fInterrupt ? "interrupt-driven" : "polled");
+        IOLog("Virtio9P: %s\n", !fInterrupt ? "polled" : messaged ? "interrupt-driven, on MSI" : "interrupt-driven");
     }
 
     /* Found by its tag when mount_9p asks for it (p9t_open), and shown in the registry. */

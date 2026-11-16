@@ -54,6 +54,11 @@ once at a time.
   50 ms that finds a reply no interrupt announced -- wakes it; two such ticks in a row turn polling
   on. Polled where the interrupt cannot be had, or with `Polled` true in the personality: a 2 ms
   spin, then 1 ms sleeps, which are a scheduler tick (10 ms) on the older kernels.
+- MSI (0.3.0): where the device offers plain MSI and no MSI-X -- QEMU's `x-legacy-msi=on,vectors=0`
+  (patches/qemu 0092), which the chart gives Leopard with `share.msi` -- the driver takes the MSI
+  vector IOPCIFamily lists, and logs "interrupt-driven, on MSI". Leopard's IOPCIFamily has no
+  MSI-X, and its legacy lines share IOAPIC pins 10 and 11 with the AHCI. MSI-X is never taken:
+  enabled, it moves the legacy header's device configuration from 20 to 24.
 
 ## Why it is built twice, and in the guests
 

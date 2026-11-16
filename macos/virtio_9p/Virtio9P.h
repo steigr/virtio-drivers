@@ -22,7 +22,9 @@
  * published on the driver's work loop and its caller sleeps on the command gate until the
  * interrupt, or a watchdog that finds a reply no interrupt announced, wakes it; a watchdog that
  * keeps finding them turns polling on. Polled otherwise, or with Polled true in the personality: a
- * short spin, then millisecond sleeps, and the rings ask the device for no interrupt.
+ * short spin, then millisecond sleeps, and the rings ask the device for no interrupt. The
+ * interrupt is a plain MSI vector where the device offers MSI and no MSI-X (0.3.0 on), else the
+ * legacy line.
  */
 
 #ifndef _GR_STEI_VIRTIO9P_H
