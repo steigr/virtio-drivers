@@ -252,6 +252,8 @@ private:
     UInt32                        fQuietTicks;  /* ticks that found work no interrupt had announced */
     UInt32                        fRecoveries;  /* lost interrupts recovered from since the last one taken */
     UInt32                        fRecovered;   /* and in all */
+    bool                          fDrought;     /* kRecoveriesMax in a row on a routed line: the watchdog looks every kPollMS */
+    UInt32                        fDroughts;    /* how many such stretches, for the log */
     UInt32                        fStallMS;     /* how long requests have been out with no completion */
     UInt16                        fStallUsed;   /* the used index that long ago */
     bool                          fStallSaid;   /* and that it was logged, once per stall */

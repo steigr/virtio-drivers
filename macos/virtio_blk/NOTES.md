@@ -20,6 +20,13 @@ IODMACommand per request slot; up to 0.2.6 through `getPhysicalSegment64`, with 
 CPUs corrupted the guest's memory (CHANGELOG.md's "2026-10-16: VirtioBlock 0.2.7 takes the 32-bit
 kernels' buffers through an IODMACommand").
 
+**0.2.8**: a line that has carried an interrupt is never given up for polling. Five lost
+interrupts in a row on it are a drought in their delivery: the watchdog looks every 2 ms until an
+interrupt comes, says so ("the watchdog looks every 2 ms until one comes", then "interrupts come
+again"), and goes back to 50 ms. 0.2.7 polled for good instead, as Leopard's system disk did on
+2026-11-13 after 2997 interrupts and 12 recoveries. Only a line that never carried one turns
+polling on.
+
 ## Host side
 
     -drive file=disk.img,if=none,id=vd0,format=raw -device virtio-blk-pci,disable-modern=on,drive=vd0
@@ -50,8 +57,9 @@ Utility initialises it.
   system disk shares its line with Virtio9P and the gauntlet's second disk.
 - A lost interrupt is recovered from (0.2.5). When the watchdog (every 50 ms while requests are
   out) finds completions that no interrupt announced, it reads the ISR, which lowers the device's
-  line so that its next completion raises it afresh, and serves them. Only five recoveries in a row
-  with no interrupt between them -- a line that is not routed at all -- turn polling on: every 2 ms
+  line so that its next completion raises it afresh, and serves them. Five recoveries in a row
+  with no interrupt between them have the watchdog look every 2 ms until one comes (0.2.8). Only on
+  a line that never carried an interrupt -- one not routed at all -- do they turn polling on: every 2 ms
   while busy and every 100 ms while idle, to read the ISR (which lowers a stray INTx). The source is
   then given back, not left disabled. `Polled` set to `true` in the personality forces polling.
 - Up to 0.2.4 the first lost interrupt turned polling on for good. On the whole gauntlet of

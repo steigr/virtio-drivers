@@ -1,6 +1,6 @@
 # virtio_blk for Mac OS X
 
-`VirtioBlock.kext` 0.2.7, for `virtio-blk-pci (1af4:1001)`. A virtio block device as a disk: an `IOBlockStorageDevice`, so `/dev/disk<n>` and its partitions appear as for any disk. Can be the boot disk.
+`VirtioBlock.kext` 0.2.8, for `virtio-blk-pci (1af4:1001)`. A virtio block device as a disk: an `IOBlockStorageDevice`, so `/dev/disk<n>` and its partitions appear as for any disk. Can be the boot disk.
 
 **Maturity:** **Stable** on Intel (10.4 to 10.13 install onto and boot from it; 10.14 and 10.15 use Apple's driver). **Beta** on PowerPC: proven on 10.2.8 and in the gauntlet's add-ons; the `gcc2` build on 10.0 and 10.1 and the 10.3 build are not checked live.
 

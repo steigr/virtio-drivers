@@ -55,8 +55,9 @@ else
 	toolchain="already installed in the guest"
 fi
 
+# The guest builds in virtioblock/, the folder's name before this repository named it virtio_blk.
 COPYFILE_DISABLE=1 tar -C "$here/.." --format ustar --no-mac-metadata --no-xattrs --exclude build \
-	-czf "$work/src.tgz" virtioblock
+	-s ",^$(basename "$here"),virtioblock," -czf "$work/src.tgz" "$(basename "$here")"
 pod sh -c 'cat > /share/virtioblock-build/src.tgz' < "$work/src.tgz"
 # Served from /share/virtioblock-build by a server this script started, which a nonce proves.
 nonce=$(uuidgen)
