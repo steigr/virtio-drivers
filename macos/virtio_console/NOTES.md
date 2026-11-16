@@ -24,7 +24,24 @@ and none fail. QEMU's CPU on the idle 10.0.4, three 60-second samples six minute
 5.8 s with VirtioConsole, Virtio9P and VirtioVsock interrupt-driven, 6.0 to 6.2 s with all three
 `Polled` true. `ladder/ladder.sh`'s `virtio-test` passed on 10.0 to 10.3 with it.
 
-## Why it is built in the guests
+## MSI on Mac OS X 10.5 (0.3.0)
+
+The driver takes a message-signalled interrupt where the platform gives the device one, and the
+line otherwise. Mac OS X 10.5's IOPCIFamily (IOPCIFamily-110, as 10.5.8 ships it) adds an MSI
+vector after the line's to any device with an MSI capability (`resolveMSIInterrupts`); its MSI-X
+code is compiled out (`#if 0`), so QEMU's virtio-pci MSI-X is no use to it. QEMU's
+`x-legacy-msi=on` (steigr/qemu-vm-container-macos-guest's patches/qemu 0092) gives the device a plain
+MSI capability. The start line then says "interrupt-driven, on MSI". 10.4 adds no vector, and
+index 0, the line, is taken as before.
+
+What it is for: on QEMU's q35 a Leopard device's INTx can land on an IOAPIC pin its handler is not
+registered on, the configuration space's fallback line (IOPCIFamily's `resolveLegacyInterrupts`,
+`irq &= 0xf`), shared with the AHCI. A vector is the device's alone.
+
+On leopard2's disk under this Mac's QEMU (TCG, 2026-11-16): "interrupt-driven, on MSI", the
+platform's MSIFree from 62 to 61, 2 MiB out at 968 KB/s and in at 1.7 MB/s, no fallback to polling.
+
+
 
 A kext links against the kernel's C++ classes, and the compiler that built the kernel decides how
 they are laid out and named. 10.0 and 10.1 were built with GCC 2.95, 10.2 and later with GCC 3, and
