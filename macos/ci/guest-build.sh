@@ -7,6 +7,7 @@
 # variant   gcc2-10.0   GCC 2.95.2 with the 10.0 toolkit's headers    (/opt/toolkit-10.0, side-toolkit.sh)
 #           gcc2-10.1   GCC 2.95.2 with the 10.1 toolkit's headers    (/opt/toolkit-10.1)
 #           gcc3-10.3   Panther's own GCC 3.3 and headers             (covers 10.2 and 10.3 in the ladder)
+#           intel       Xcode 3.2.6's GCC 4.0/4.2 and 10.4u-10.6 SDKs  (the Snow Leopard guest, for Intel 10.4 on)
 #
 # The finished kext and the component's extras are tarred to <share>/out/<variant>.tgz.
 # Built on the guest's own disk: the 9p share refuses the linker's chmod.
@@ -28,6 +29,20 @@ gcc2-*)
 gcc3-*)
   abi=gcc3
   make ABI=gcc3 VERSION=$VERSION
+  ;;
+intel)
+  abi=intel
+  make ABI=intel VERSION=$VERSION
+  # What it was built with, beside the kext, as the Intel tarballs have always carried.
+  {
+    echo "$KEXT $VERSION, make ABI=intel"
+    echo "source: ${SOURCE:-unknown}"
+    echo "built on: `sw_vers -productVersion` `sw_vers -buildVersion`"
+    gcc-4.0 --version | head -1
+    gcc-4.2 --version | head -1
+    echo "kext: `lipo -info build/intel/$KEXT.kext/Contents/MacOS/$KEXT | sed 's/.*: //'`"
+  } > build/intel/BUILD-INFO
+  EXTRAS="$EXTRAS BUILD-INFO"
   ;;
 *) echo "unknown variant $variant" >&2; exit 2 ;;
 esac

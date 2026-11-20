@@ -8,6 +8,9 @@
 # Authenticates with PACKAGES_JWT, an Actions ID token for an Authorized Integration
 # that carries write:package (the job's own token cannot write packages), or with
 # PACKAGES_TOKEN, an access token. Needs the Forgejo variables of the job.
+#
+# ADD=1 adds the files to the versions instead of replacing them: the Intel job of a driver's
+# workflow puts its files beside the PowerPC job's, in the same version, after it.
 set -eu
 pkg=$1; ver=$2; shift 2
 [ $# -gt 0 ] || { echo "usage: $0 <package> <version> <file>..."; exit 2; }
@@ -24,9 +27,11 @@ trap 'rm -f "$resp"' 0
 
 for v in "$ver" latest; do
 	# A version cannot be uploaded twice: remove the old one (404 when there is none).
-	curl -s -m 60 -o /dev/null -X DELETE -H "$auth" "$api/$v" || true
+	[ "${ADD:-}" = 1 ] || curl -s -m 60 -o /dev/null -X DELETE -H "$auth" "$api/$v" || true
 	for file in "$@"; do
 		name=$(basename "$file" | sed "s/-$ver/-$v/")
+		# Added again, as a re-run does: its old copy goes first.
+		[ "${ADD:-}" != 1 ] || curl -s -m 60 -o /dev/null -X DELETE -H "$auth" "$api/$v/$name" || true
 		code=$(curl -s -m 600 -o "$resp" -w '%{http_code}' -X PUT -H "$auth" --upload-file "$file" "$api/$v/$name")
 		[ "$code" = 201 ] || {
 			cat "$resp"; echo
