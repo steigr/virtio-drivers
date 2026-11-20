@@ -1,0 +1,12 @@
+{
+  "name": "Virtio9P",
+  "identifier": "io.virtio.virtio-9p",
+  "version": "0.0.0",
+  "title": "Virtio 9P",
+  "description": "virtio 9P share as the 9p filesystem, with mount_9p.",
+  "restart": "required",
+  "files": [
+    {"srcdir": "kexts/Virtio9P.kext", "dest": "/System/Library/Extensions/Virtio9P.kext", "filemode": "0644"},
+    {"src": "kexts/mount_9p", "dest": "/sbin/mount_9p", "mode": "0755"}
+  ]
+}
