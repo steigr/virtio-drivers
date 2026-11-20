@@ -367,8 +367,8 @@ static bool hasCapability(IOPCIDevice *pci, UInt8 id)
 /* Which of the provider's interrupts to take (0.3.0 on): a plain MSI vector where the device
  * offers MSI and not MSI-X, else the legacy line, index 0. The point is Leopard, whose IOPCIFamily
  * has no MSI-X (its lookup is #if 0) and whose legacy lines fall back to IOAPIC pins 10 and 11,
- * where they share the AHCI's (TODO.md's "Every q35 PCI device's interrupt line holds its own APIC
- * line"); QEMU gives the device plain MSI with x-legacy-msi=on (patches/qemu 0092) and vectors=0.
+ * where they share the AHCI's (steigr/qemu-vm-container-macos-guest's TODO.md's "Every q35 PCI device's interrupt line holds its own APIC
+ * line"); QEMU gives the device plain MSI with x-legacy-msi=on (that repository's patches/qemu 0092) and vectors=0.
  * MSI-X is never taken: enabled, it moves the legacy header's device configuration from 20 to 24,
  * which this driver does not follow, so a device that has it stays on its line. Plain MSI leaves
  * the header where it is, and the ISR is still read and cleared as on the line. */

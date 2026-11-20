@@ -1,26 +1,25 @@
 #!/bin/bash
 # build-intel.sh: build Virtio9P.kext and mount_9p for the Intel releases (`make ABI=kpi`) inside a
-# Snow Leopard guest in the cluster, and leave guest/dist/virtio9p-intel.tar.gz -- the kext,
-# mount_9p and a BUILD-INFO -- for `make guest-addons-embed`.
+# Snow Leopard guest running in Kubernetes, and leave dist/virtio9p-intel.tar.gz -- the kext,
+# mount_9p and a BUILD-INFO.
 #
-# usage: build-intel.sh [ISO]
+# usage: build-intel.sh ISO
 #
-# ISO is the Snow Leopard retail DVD (default 10.6.8, 10K549, under a local directory),
+# ISO is the Snow Leopard retail DVD (10.6.8, 10K549),
 # whose "Optional Installs" carries Xcode 3.2.6: its packages -- the tools, GCC 4.0 and 4.2, the
 # 10.4u, 10.5 and 10.6 SDKs -- are installed in the guest one by one unless it has them. Attached
 # read-only with hdiutil, so this runs on a Mac.
 #
-# The guest is RELEASE's pod (default snowleopard-guest) in NAMESPACE, running with its agent connected,
-# and claimed for this (kubectl annotate sts/<release> claimed-by=<you>): other sessions
-# build and test in the same releases. Files go in over HTTP, which the pod serves on its loopback
+# The guest is the pod RELEASE-0 in NAMESPACE of KUBE_CONTEXT (all three required), running with its
+# agent connected; nothing else should use it meanwhile. Files go in over HTTP, which the pod serves on its loopback
 # and passt gives the guest at its gateway; the result comes back as base64 through the agent and
 # is checked against the guest's own SHA-256 of it.
 set -euo pipefail
 
-ISO=${1:-}
-RELEASE=${RELEASE:-snowleopard-guest}
-KUBE_CONTEXT=${KUBE_CONTEXT:-$KUBE_CONTEXT}
-NAMESPACE=${NAMESPACE:-macos}
+ISO=${1:?usage: build-intel.sh ISO}
+RELEASE=${RELEASE:?release of the guest, whose pod is RELEASE-0}
+KUBE_CONTEXT=${KUBE_CONTEXT:?the kubectl context}
+NAMESPACE=${NAMESPACE:?namespace of the guest}
 PORT=${PORT:-8094}
 PACKAGES="DeveloperToolsSystemSupport VersionedDeveloperToolsSystemSupport DeveloperToolsCLI DevSDK gcc4.0 gcc4.2 MacOSX10.4.Universal MacOSX10.5 MacOSX10.6"
 
@@ -56,8 +55,9 @@ else
 	toolchain="already installed in the guest"
 fi
 
+# The guest builds in virtio9p/, the folder's name before this repository named it virtio_9p.
 COPYFILE_DISABLE=1 tar -C "$here/.." --format ustar --no-mac-metadata --no-xattrs --exclude build \
-	-czf "$work/src.tgz" virtio9p
+	-s ",^$(basename "$here"),virtio9p," -czf "$work/src.tgz" "$(basename "$here")"
 pod sh -c 'cat > /share/virtio9p-build/src.tgz' < "$work/src.tgz"
 # Served from /share/virtio9p-build by a server this script started, which a nonce proves.
 nonce=$(uuidgen)

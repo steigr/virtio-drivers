@@ -1,5 +1,5 @@
 # Builds Virtio9P.kext and mount_9p inside a Mac OS X guest, with that guest's own Developer
-# Tools, the way ../ppc/virtioconsole is built (see its Makefile for where every compiler flag of
+# Tools, the way ../virtio_console is built (see its Makefile for where every compiler flag of
 # the PowerPC builds comes from and the failure behind each):
 #
 #   make ABI=gcc2   on 10.1 with the December 2001 tools (GCC 2.95): for 10.0 and 10.1, PowerPC
