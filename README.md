@@ -10,7 +10,7 @@ release workflow.
 | Driver | Platform | Device | Version | Maturity |
 | --- | --- | --- | --- | --- |
 | [virtio_9p](macos/virtio_9p) | Mac OS X | 9P transport (share, with `mount_9p`) | 0.3.0 | Stable on PowerPC 10.0 to 10.3 and Intel 10.4 to 10.13 |
-| [virtio_blk](macos/virtio_blk) | Mac OS X | block | 0.2.8 | Stable on Intel 10.4 to 10.13 (boot disk); Beta on PowerPC 10.0 to 10.3 |
+| [virtio_blk](macos/virtio_blk) | Mac OS X | block | 0.2.9 | Stable on Intel 10.4 to 10.13 (boot disk); Beta on PowerPC 10.0 to 10.3 |
 | [virtio_console](macos/virtio_console) | Mac OS X | console | 0.2.0 | Stable on PowerPC 10.0 to 10.3 |
 | [virtio_input](macos/virtio_input) | Mac OS X | input (tablet, mouse) | 0.1.0 | Beta on PowerPC 10.0 to 10.3 |
 | [virtio_net](macos/virtio_net) | Mac OS X | network | 0.2.2 | Stable on PowerPC 10.0 to 10.3 and Intel 10.5 to 10.13; Beta on 10.4 and 10.14 |
@@ -20,8 +20,7 @@ release workflow.
 | [virtio_9p](irix/virtio_9p) | IRIX | 9P transport | date | Beta: runs on IP28 and IP35 |
 
 [irix/virtio](irix/virtio) is the IRIX transport layer (split rings, virtio-mmio on GIO,
-virtio-pci) that both IRIX drivers link in. [irix/virtio_9p](irix/virtio_9p) is the IRIX counterpart
-of [macos/virtio_9p](macos/virtio_9p): both are 9P clients over virtio, and they share no code.
+virtio-pci) that both IRIX drivers link in.
 
 **Stable**: runs end to end on the releases or machines named, in daily use by the test guests and
 installers. **Beta**: runs end to end on some of them; the rest compile, or are not yet checked
@@ -70,6 +69,4 @@ Everything about the runners and the infrastructure is configured on the organis
 
 The drivers were separate repositories until 2026-11-10, imported here with their history:
 `macos/virtioblock`, `virtioconsole`, `virtiotablet`, `virtionet`, `virtiorand`, `virtiovsock` and
-`irix/virtio` (whose `vioser` and `p9fs` are now `virtio_serial` and `virtio_9p`). `macos/virtio9p`
-followed with its history as `macos/virtio_9p`, and with the changes made to it since in
-steigr/qemu-vm-container-macos-guest's `guest/drivers/virtio9p`.
+`irix/virtio` (whose `vioser` and `p9fs` are now `virtio_serial` and `virtio_9p`).
