@@ -27,6 +27,28 @@ again"), and goes back to 50 ms. 0.2.7 polled for good instead, as Leopard's sys
 2026-11-13 after 2997 interrupts and 12 recoveries. Only a line that never carried one turns
 polling on.
 
+**0.2.9** (2026-11-20): this 0.2.8 and the other one. steigr/qemu-vm-container-macos-guest's
+`guest/drivers/virtioblock` also called its fix 0.2.8 (db59f3bf, 2026-11-05, before the drivers
+moved here): on PowerPC the interrupt is registered before the device starts again, as up to 0.2.3.
+0.2.4 to 0.2.7 registered it on the live device everywhere, for Intel's shared INTx; on 10.2 and
+10.3 that hung `start` in `interruptAttach`, with the filter running beneath it, before the root
+disk was found (`virtio-test`'s boot from virtio-blk, bootstrap 5bc76e348f07; that repository's
+CHANGELOG.md's "2026-11-05: VirtioBlock 0.2.4 to 0.2.7 hung PowerPC's boot from virtio-blk", where
+a 10.3 guest booted from virtio-blk with it). 0.2.9 carries both:
+
+- PowerPC: `interruptAttach` before `deviceStart`, the source registered and disabled through the
+  reset; if it cannot be had, `fPolled` has `deviceStart` ask the device for no interrupts.
+- Intel: `interruptAttach` after `deviceStart`, on the reset device, as since 0.2.4.
+- Both: `interruptAttach` no longer enables the source; `start` does, once `fRunning` is set, so on
+  Intel the two still follow each other at once. The watchdog, its drought (every 2 ms until an
+  interrupt comes) and the fallback to polling on a line that never carried one are the same on
+  both, and that fallback gives the source back (`interruptDetach`) whichever order registered it.
+
+Not yet built or run, on either architecture: CI builds the PowerPC variants only on a push to
+`main`, and Intel is built by `build-intel.sh` in a cluster guest. The PowerPC order is
+db59f3bf's, which booted 10.3 from virtio-blk; the drought logic on top of it, and Intel's path
+with the enable moved into `start`, are reasoned about, not seen.
+
 ## Host side
 
     -drive file=disk.img,if=none,id=vd0,format=raw -device virtio-blk-pci,disable-modern=on,drive=vd0
@@ -51,10 +73,12 @@ Utility initialises it.
 - At most 30 pages per request (`reportMaxRead/WriteTransfer`, 120 KiB), so a request never needs
   more than the 32 data descriptors of its slot. Up to 16 requests are in flight (the queue's size
   divided by 34 descriptors a slot: 7 with QEMU's 256 entries); more wait in a list.
-- Interrupt-driven where the platform routes the device's PCI interrupt. The interrupt is
+- Interrupt-driven where the platform routes the device's PCI interrupt. On Intel the interrupt is
   registered only once the device is reset, and enabled at once (0.2.4). A filter source
   registered and left disabled gets its vector masked by the next interrupt on it, and on q35 the
-  system disk shares its line with Virtio9P and the gauntlet's second disk.
+  system disk shares its line with Virtio9P and the gauntlet's second disk. On PowerPC it is
+  registered before the reset and enabled after (0.2.9): registered on the live device it never
+  returned there.
 - A lost interrupt is recovered from (0.2.5). When the watchdog (every 50 ms while requests are
   out) finds completions that no interrupt announced, it reads the ISR, which lowers the device's
   line so that its next completion raises it afresh, and serves them. Five recoveries in a row

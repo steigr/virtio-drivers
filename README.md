@@ -9,7 +9,7 @@ release workflow.
 
 | Driver | Platform | Device | Version | Maturity |
 | --- | --- | --- | --- | --- |
-| [virtio_blk](macos/virtio_blk) | Mac OS X | block | 0.2.8 | Stable on Intel 10.4 to 10.13 (boot disk); Beta on PowerPC 10.0 to 10.3 |
+| [virtio_blk](macos/virtio_blk) | Mac OS X | block | 0.2.9 | Stable on Intel 10.4 to 10.13 (boot disk); Beta on PowerPC 10.0 to 10.3 |
 | [virtio_console](macos/virtio_console) | Mac OS X | console | 0.2.0 | Stable on PowerPC 10.0 to 10.3 |
 | [virtio_input](macos/virtio_input) | Mac OS X | input (tablet, mouse) | 0.1.0 | Beta on PowerPC 10.0 to 10.3 |
 | [virtio_net](macos/virtio_net) | Mac OS X | network | 0.2.2 | Stable on PowerPC 10.0 to 10.3 and Intel 10.5 to 10.13; Beta on 10.4 and 10.14 |

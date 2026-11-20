@@ -1,8 +1,14 @@
 # virtio_blk for Mac OS X
 
-`VirtioBlock.kext` 0.2.8, for `virtio-blk-pci (1af4:1001)`. A virtio block device as a disk: an `IOBlockStorageDevice`, so `/dev/disk<n>` and its partitions appear as for any disk. Can be the boot disk.
+`VirtioBlock.kext` 0.2.9, for `virtio-blk-pci (1af4:1001)`. A virtio block device as a disk: an `IOBlockStorageDevice`, so `/dev/disk<n>` and its partitions appear as for any disk. Can be the boot disk.
 
 **Maturity:** **Stable** on Intel (10.4 to 10.13 install onto and boot from it; 10.14 and 10.15 use Apple's driver). **Beta** on PowerPC: proven on 10.2.8 and in the gauntlet's add-ons; the `gcc2` build on 10.0 and 10.1 and the 10.3 build are not checked live.
+
+**0.2.9** (2026-11-20) combines this repository's 0.2.8 (a routed line is never given up for
+polling) with the other 0.2.8, steigr/qemu-vm-container-macos-guest's db59f3bf of 2026-11-05: on
+PowerPC the interrupt is registered before the device starts, as up to 0.2.3, without which 10.2's
+and 10.3's boot from virtio-blk hung. `NOTES.md` says how. Not yet built or run: CI builds the
+PowerPC variants only on a push to `main`, and Intel is built by `build-intel.sh` in a cluster guest.
 
 ## Build
 
