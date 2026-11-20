@@ -1,6 +1,10 @@
 #!/bin/sh
 # On the Forgejo runner beside the Panther guest: panther-build.sh <variant> <driver dir> <out dir>
 #
+# And beside the Snow Leopard guest, for the variant intel: the two runners reach their guests the same
+# way (GUEST_SSH and the share), and guest-build.sh says what each variant builds. SOURCE, if set, is
+# what the Intel BUILD-INFO names as the source.
+#
 # <driver dir> is one of macos/<driver>, with its Makefile and component.sh; the guest-side scripts come
 # from this directory.
 #
@@ -44,7 +48,7 @@ until ssh_guest true; do
 	[ "$n" -lt 40 ] || { echo "the guest did not answer ssh" >&2; exit 1; }
 	sleep 5
 done
-ssh_guest "sh -c 'VERSION=$version sh $gshare/guest-build.sh $variant $gshare 2>&1'"
+ssh_guest "sh -c 'VERSION=$version SOURCE=\"${SOURCE:-}\" sh $gshare/guest-build.sh $variant $gshare 2>&1'"
 mkdir -p "$out/$variant"
 tar -C "$out/$variant" -xzf "$share/out/$variant.tgz"
 [ ! -f "$share/out/$variant-top.tgz" ] || tar -C "$out/$variant" -xzf "$share/out/$variant-top.tgz"

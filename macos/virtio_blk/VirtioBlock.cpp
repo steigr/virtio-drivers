@@ -593,8 +593,10 @@ void io_virtio_VirtioBlock::timeoutAction(OSObject *owner, IOTimerEventSource *)
     ((io_virtio_VirtioBlock *) owner)->timeoutOccurred();
 }
 
-/* Registers the device's interrupt and enables it at once: a filter source registered and left
- * disabled is what a shared INTx cannot afford (see interruptDetach). */
+/* Registers the device's interrupt, disabled; start enables it once the driver runs. On Intel the
+ * two follow each other at once: a filter source registered and left disabled is what a shared INTx
+ * cannot afford (see interruptDetach). On PowerPC the source is registered before the device starts
+ * and sits disabled through its reset, as up to 0.2.3 (see start). */
 bool io_virtio_VirtioBlock::interruptAttach()
 {
     if (fInterrupt)
@@ -608,7 +610,6 @@ bool io_virtio_VirtioBlock::interruptAttach()
         fInterrupt = 0;
         return false;
     }
-    fInterrupt->enable();
     return true;
 }
 
@@ -747,8 +748,23 @@ bool io_virtio_VirtioBlock::start(IOService *provider)
     fTimer = IOTimerEventSource::timerEventSource(this, timeoutAction);
     if (!fTimer || fWorkLoop->addEventSource(fTimer) != kIOReturnSuccess)
         goto fail;
+#ifdef __ppc__
+    /* On PowerPC the interrupt is registered before the device starts, as up to 0.2.3, and enabled
+     * once the driver runs. Registered on the live device, as 0.2.4 began to do everywhere, it hung
+     * 10.2's and 10.3's start in interruptAttach with the filter running beneath it, before the root
+     * disk was found (virtio-test, bootstrap 5bc76e348f07, 2026-11-05); the old order boots. Failing
+     * here, fPolled has deviceStart ask the device for no interrupts (*fAvailFlags is not there yet).
+     * Either way the watchdog's drought and its fallback to polling (timeoutOccurred) apply as on
+     * Intel: the source is enabled in time for the first request, and given back if it never
+     * carries an interrupt. */
+    if (!fPolled && !interruptAttach()) {
+        IOLog("VirtioBlock: the device's interrupt cannot be had; polling every %d ms instead\n", kPollMS);
+        fPolled = true;
+    }
+#endif
     if (!deviceStart())
         goto fail;
+#ifndef __ppc__
     /* The interrupt only now: the device is reset and its ISR clear, so the line is low. Up to
      * 0.2.3 it was registered before the reset and enabled after it, and the source sat registered
      * and disabled while whatever the firmware left -- OVMF and OpenCore read the disk through the
@@ -762,7 +778,10 @@ bool io_virtio_VirtioBlock::start(IOService *provider)
         fPolled = true;
         *fAvailFlags = kAvailNoInterrupt;
     }
+#endif
     fRunning = true;
+    if (fInterrupt)
+        fInterrupt->enable();   /* on both: registered just now on Intel, before deviceStart on PowerPC */
     if (fPolled) {
         ackInterrupt();         /* whatever the firmware or a reset left */
         fGate->runAction(armAction);

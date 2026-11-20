@@ -96,12 +96,69 @@ jobs:
           # The files carry the Makefile's VERSION; the registry's version adds the run number.
           sh src/ci/publish-package.sh "$PACKAGE" "$version" dist/*
 
-      - name: Publish to the update publisher
+  # The Intel build (component.sh's INTEL_MAKE and INTEL_ARTIFACT), on the runner beside the Snow Leopard guest (deploy/ci/git-stei-gr-macos-snowleopard.yaml in
+  # steigr/qemu-vm-container-macos-guest), whose Xcode 3.2.6 builds for Intel 10.4 on. After the
+  # PowerPC job, because that one replaces the package version and this one adds to it: one version, both platforms.
+  # Then the update publisher, once, with every file of the version.
+  intel:
+    needs: build
+    runs-on: macosx-intel
+    timeout-minutes: 60
+    steps:
+      - name: Clone
+        run: |
+          rm -rf src
+          git -c http.extraHeader="Authorization: bearer ${{ forgejo.token }}" \
+            clone --depth 1 "${{ forgejo.server_url }}/${{ forgejo.repository }}.git" src
+          git -C src fetch --quiet --depth 1 origin "${{ forgejo.sha }}" && git -C src checkout --quiet FETCH_HEAD
+          sed -n 's/^VERSION *?= *//p' "src/$DRIVER/Makefile" | head -1 > version.txt
+
+      - name: Build in the Snow Leopard guest
+        run: |
+          export VERSION=$(cat version.txt) SOURCE="${{ forgejo.repository }} ${{ forgejo.sha }}"
+          sh src/macos/ci/panther-build.sh intel "src/$DRIVER" out
+          cat out/intel/BUILD-INFO
+
+      - name: Package
+        run: |
+          . "src/$DRIVER/component.sh"
+          VERSION=$(cat version.txt)
+          rm -rf dist; mkdir -p dist
+          tar -C out/intel -czf "dist/$PKG-intel-$VERSION.kext.tar.gz" .
+          ls -l dist
+
+      - name: Publish to the package registry, beside the PowerPC files
         env:
-          APPCAST: "false"
+          AUD: ${{ vars.AUD }}
+          ADD: "1"
         run: |
           . "src/$DRIVER/component.sh"
           version="$(cat version.txt).${{ forgejo.run_number }}"
+          PACKAGES_JWT=$(curl --fail -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$AUD" | jq -r .value)
+          echo "::add-mask::$PACKAGES_JWT"
+          export PACKAGES_JWT
+          sh src/ci/publish-package.sh "$PACKAGE" "$version" dist/*
+
+      - name: Publish to the update publisher
+        env:
+          APPCAST: "false"
+          AUD: ${{ vars.AUD }}
+        run: |
+          . "src/$DRIVER/component.sh"
+          VERSION=$(cat version.txt)
+          version="$VERSION.${{ forgejo.run_number }}"
+          PACKAGES_JWT=$(curl --fail -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$AUD" | jq -r .value)
+          echo "::add-mask::$PACKAGES_JWT"
+          # The PowerPC files of this version, from the registry the job before put them in.
+          for variant in $VARIANTS; do
+            for kind in pkg kext; do
+              f="$PKG-$variant-$VERSION.$kind.tar.gz"
+              curl --fail -sS -H "Authorization: bearer $PACKAGES_JWT" -o "dist/$f" \
+                "${{ forgejo.server_url }}/api/packages/${GITHUB_REPOSITORY%%/*}/generic/$PACKAGE/$version/$f"
+            done
+          done
           set -- dist/*.pkg.tar.gz dist/*.kext.tar.gz
           archive=$1; shift
           sh src/ci/publisher-client.sh "$PACKAGE" "$version" "$version" "$archive" "$@"
