@@ -53,7 +53,7 @@ jobs:
             sh src/macos/ci/panther-build.sh "$variant" "src/$DRIVER" out
             echo "::endgroup::"
           done
-          ls -lR out | head -40
+          find out -type f | sort
 
       - name: Package
         env:
