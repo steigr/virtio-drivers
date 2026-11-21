@@ -1,10 +1,14 @@
-# Older Developer Tools beside a newer system's own, to build for 10.0 and 10.1 on Panther (10.3.9).
+# Older Developer Tools beside a newer system's own, to build for 10.0, 10.1 and 10.2 on Panther (10.3.9).
+# 10.2's are used for their kernel headers and kmod libraries only, with Panther's own GCC 3.3
+# (guest-build.sh's gcc3-10.2); `env` is for 10.0's and 10.1's GCC 2.95.2.
 # Run in the guest as root (sh), with the discs' package archives somewhere the guest can read, e.g.
 # the 9p share:
 #
 #   side-toolkit.sh unpack 10.0 /Volumes/share/tk/dev10.0.pax.gz       # 691-2963-A: Developer.pkg's pax.gz
 #   side-toolkit.sh unpack 10.1 /Volumes/share/tk/devtools10.1.pax.gz /Volumes/share/tk/devsdk10.1.pax.gz
 #                                                                       # 691-3451-A: DevTools.pkg and DevSDK.pkg
+#   side-toolkit.sh unpack 10.2 /Volumes/share/tk/devtools10.2.pax.gz /Volumes/share/tk/devsdk10.2.pax.gz
+#                                                                       # December 2002 tools: the same two
 #   side-toolkit.sh env 10.0 /tmp/work                                   # a cc for 10.0's compiler; prints the make words
 #
 # The packages are unpacked into /opt/toolkit-<release> and nothing else of the system is touched: over
