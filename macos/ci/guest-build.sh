@@ -22,6 +22,9 @@ set -e
 variant=$1
 share=$2
 . "$share/component.sh"
+# A variant's own make words, from component.sh's MAKE_<variant> (dots and dashes as underscores), e.g.
+# VirtioRand's MAKE_gcc2_10_0="RANDOM_DEVICE=1": on 10.0 the driver is /dev/random itself.
+eval "extra=\${MAKE_`echo $variant | tr '.-' '__'`:-}"
 w=/tmp/build-$variant-$$
 rm -rf "$w"; mkdir -p "$w/src"
 cd "$w/src"
@@ -31,7 +34,7 @@ gcc2-*)
   rel=${variant#gcc2-}
   eval "`sh $share/side-toolkit.sh env $rel $w`"
   abi=gcc2
-  make ABI=gcc2 KERNEL_HEADERS=$KERNEL_HEADERS KMOD_LIB_DIR=$KMOD_LIB_DIR VERSION=$VERSION
+  make ABI=gcc2 KERNEL_HEADERS=$KERNEL_HEADERS KMOD_LIB_DIR=$KMOD_LIB_DIR VERSION=$VERSION $extra
   ;;
 gcc3-10.2)
   abi=gcc3
@@ -39,11 +42,11 @@ gcc3-10.2)
   [ -d "$t/System/Library/Frameworks/Kernel.framework/Versions/A/Headers" ] || { echo "no toolkit at $t" >&2; exit 1; }
   # libcc_kext.a by its versioned directory: the packages' postflight, which links gcc/darwin/default, did not run.
   make ABI=gcc3 KERNEL_HEADERS=$t/System/Library/Frameworks/Kernel.framework/Versions/A/Headers \
-    KMOD_LIB_DIR="$t/usr/lib/gcc/darwin/3.1 $t/usr/lib" VERSION=$VERSION
+    KMOD_LIB_DIR="$t/usr/lib/gcc/darwin/3.1 $t/usr/lib" VERSION=$VERSION $extra
   ;;
 gcc3-10.3)
   abi=gcc3
-  make ABI=gcc3 VERSION=$VERSION
+  make ABI=gcc3 VERSION=$VERSION $extra
   ;;
 intel)
   # What component.sh names: INTEL_MAKE, what make is run with, and INTEL_ARTIFACT, the files the build
