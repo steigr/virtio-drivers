@@ -15,6 +15,11 @@
 #define _GR_STEI_VIRTIOVSOCK_USER_H
 
 #define kVirtioVsockClass       "io_virtio_VirtioVsock"
+/* The class the kext registered before it came to virtio-drivers (0.2.2 and earlier). libvsock
+ * looks for both, so that a program built against either header finds either kext. Live on
+ * 2026-11-21: qemu-guest-agent 0.3.1, whose copy of this header named only the old class, found
+ * no vsock on any guest with VirtioVsock 0.2.3 and served virtio-serial alone. */
+#define kVirtioVsockClassOld    "gr_stei_VirtioVsock"
 
 /* The CIDs the specification reserves. */
 #define VSOCK_CID_HYPERVISOR    0

@@ -1,6 +1,6 @@
 # virtio_vsock for Mac OS X
 
-`VirtioVsock.kext` 0.2.3, for `vhost-vsock-pci (1af4:1053)`. A virtio socket device: stream connections to the host by CID and port, with no network in between. Not a BSD socket family: `libvsock` (`vsock.h`, `vsock.c`) gives programs a socket-like API, and `vsockcat` is a netcat for it. The guest agent's fast channel.
+`VirtioVsock.kext` 0.2.4, for `vhost-vsock-pci (1af4:1053)`. A virtio socket device: stream connections to the host by CID and port, with no network in between. Not a BSD socket family: `libvsock` (`vsock.h`, `vsock.c`) gives programs a socket-like API, and `vsockcat` is a netcat for it. The guest agent's fast channel.
 
 **Maturity:** **Beta**: on PowerPC 10.0 to 10.3 and on Intel 10.6 the tests pass, interrupt-driven and polled. Loading at boot is proven on 10.2.8 only.
 

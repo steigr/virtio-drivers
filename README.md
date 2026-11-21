@@ -15,7 +15,7 @@ release workflow.
 | [virtio_input](macos/virtio_input) | Mac OS X | input (tablet, mouse) | 0.1.0 | Beta on PowerPC 10.0 to 10.3 |
 | [virtio_net](macos/virtio_net) | Mac OS X | network | 0.2.2 | Stable on PowerPC 10.0 to 10.3 and Intel 10.5 to 10.13; Beta on 10.4 and 10.14 |
 | [virtio_rng](macos/virtio_rng) | Mac OS X | entropy | 0.1.0 | Beta on PowerPC 10.0 to 10.3 (proven on 10.2) |
-| [virtio_vsock](macos/virtio_vsock) | Mac OS X | socket | 0.2.3 | Beta on PowerPC 10.0 to 10.3 and Intel 10.6 |
+| [virtio_vsock](macos/virtio_vsock) | Mac OS X | socket | 0.2.4 | Beta on PowerPC 10.0 to 10.3 and Intel 10.6 |
 | [virtio_serial](irix/virtio_serial) | IRIX | console (multiport) | date | Beta: runs on IP28 and IP35 |
 | [virtio_9p](irix/virtio_9p) | IRIX | 9P transport | date | Beta: runs on IP28 and IP35 |
 
