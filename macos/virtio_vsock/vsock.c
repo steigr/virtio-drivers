@@ -130,6 +130,8 @@ static int fail(kern_return_t kr)
 
 int vsock_open(void)
 {
+    static const char *const classes[] = { kVirtioVsockClass, kVirtioVsockClassOld };
+    unsigned int i;
     mach_port_t master;
     io_iterator_t iter;
     io_service_t service;
@@ -148,13 +150,14 @@ int vsock_open(void)
         errno = EIO;
         return -1;
     }
-    kr = IOServiceGetMatchingServices(master, IOServiceMatching(kVirtioVsockClass), &iter);
-    if (kr != KERN_SUCCESS) {
-        errno = ENXIO;
-        return -1;
+    service = 0;
+    for (i = 0; i < sizeof classes / sizeof classes[0] && !service; i++) {
+        kr = IOServiceGetMatchingServices(master, IOServiceMatching(classes[i]), &iter);
+        if (kr != KERN_SUCCESS)
+            continue;
+        service = IOIteratorNext(iter);
+        IOObjectRelease(iter);
     }
-    service = IOIteratorNext(iter);
-    IOObjectRelease(iter);
     if (!service) {
         errno = ENXIO;
         return -1;
