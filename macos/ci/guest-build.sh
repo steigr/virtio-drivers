@@ -6,7 +6,13 @@
 #
 # variant   gcc2-10.0   GCC 2.95.2 with the 10.0 toolkit's headers    (/opt/toolkit-10.0, side-toolkit.sh)
 #           gcc2-10.1   GCC 2.95.2 with the 10.1 toolkit's headers    (/opt/toolkit-10.1)
-#           gcc3-10.3   Panther's own GCC 3.3 and headers             (covers 10.2 and 10.3 in the ladder)
+#           gcc3-10.2   Panther's GCC 3.3 with the 10.2 toolkit's kernel headers and kmod libraries (/opt/toolkit-10.2)
+#           gcc3-10.3   Panther's own GCC 3.3 and headers             (10.3)
+#
+# gcc3-10.3 does not load on 10.2: built against 10.3's IOBlockStorageDevice.h, VirtioBlock imports four methods
+# 10.3 added to it (setProperties, getProperty, get/setWriteCacheState), Jaguar's kernel resolves none of them, and
+# a Jaguar booting from virtio-blk never finds its root (gauntlet 2026-11-21). Against 10.2's headers it imports
+# exactly what the ladder's build in a Jaguar guest did.
 #           intel       Xcode 3.2.6's GCC 4.0/4.2 and 10.4u-10.6 SDKs  (the Snow Leopard guest, for Intel 10.4 on):
 #                       component.sh's INTEL_MAKE and INTEL_ARTIFACT, all to <share>/out/intel.tgz with a BUILD-INFO
 #
@@ -27,7 +33,15 @@ gcc2-*)
   abi=gcc2
   make ABI=gcc2 KERNEL_HEADERS=$KERNEL_HEADERS KMOD_LIB_DIR=$KMOD_LIB_DIR VERSION=$VERSION
   ;;
-gcc3-*)
+gcc3-10.2)
+  abi=gcc3
+  t=/opt/toolkit-10.2
+  [ -d "$t/System/Library/Frameworks/Kernel.framework/Versions/A/Headers" ] || { echo "no toolkit at $t" >&2; exit 1; }
+  # libcc_kext.a by its versioned directory: the packages' postflight, which links gcc/darwin/default, did not run.
+  make ABI=gcc3 KERNEL_HEADERS=$t/System/Library/Frameworks/Kernel.framework/Versions/A/Headers \
+    KMOD_LIB_DIR="$t/usr/lib/gcc/darwin/3.1 $t/usr/lib" VERSION=$VERSION
+  ;;
+gcc3-10.3)
   abi=gcc3
   make ABI=gcc3 VERSION=$VERSION
   ;;
