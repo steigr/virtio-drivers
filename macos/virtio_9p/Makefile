@@ -4,13 +4,13 @@
 #
 #   make ABI=gcc2   on 10.1 with the December 2001 tools (GCC 2.95): for 10.0 and 10.1, PowerPC
 #   make ABI=gcc3   on 10.2 with the December 2002 tools (GCC 3):    for 10.2 and 10.3, PowerPC
-#   make ABI=kpi    on 10.6 with Xcode 3.2.6:                        for 10.4 to 10.13, Intel
+#   make ABI=kpi    on 10.6 with Xcode 3.2.6:                        for 10.4 to 10.13, Intel, and 10.4 and 10.5, PowerPC
 #
 # Leaves build/<ABI>/Virtio9P.kext and build/<ABI>/mount_9p. The PowerPC builds are of the BSD
 # frontend (p9fs_bsd_*.c), the Intel one of the KPI frontend (p9fs_kpi_*.c); the device and the
 # protocol are every build's (p9fs.h).
 
-VERSION ?= 0.3.0
+VERSION ?= 0.3.1
 ABI     ?= gcc2
 
 # As for VirtioConsole, the GCC 2.95 build must see 10.0's Kernel.framework and kmod libraries,
@@ -92,7 +92,7 @@ $(BUILD)/mount_9p: mount_9p.c p9fs_args.h
 	cc -O2 -Wall -o $@ mount_9p.c
 endif
 
-# --- Intel, 10.4 to 10.13: one kext, two slices -------------------------------------------------
+# --- KPI, 10.4 to 10.13: one kext, three slices (ppc for PowerPC 10.4 and 10.5) -------------------------------------------------
 #
 # i386 for the 32-bit kernels of 10.4 to 10.7, against 10.4's KPI with GCC 4.0, linked as the
 # relocatable object (MH_OBJECT) every 32-bit kextload takes; x86_64 for the 64-bit kernels of
@@ -128,11 +128,19 @@ $(BUILD)/$(1)/objects: $(KPI_SRCS) Virtio9P.cpp $(KPI_HDRS)
 	touch $$@
 endef
 $(eval $(call kpi_objects,i386,$(KPI_CC_I386),$(KPI_KH_I386),-isysroot $(KPI_SDK_I386) -mmacosx-version-min=10.4 -force_cpusubtype_ALL -msoft-float -static))
+# ppc for PowerPC 10.4 and 10.5, whose kernels export the KPI too and not 10.3's VFS the PowerPC
+# builds above link against (_MALLOC, copyin, desiredvnodes: undefined on an installed 10.4.11,
+# 2026-11-22): the same 10.4 SDK, which is universal, and the same GCC 4.0.
+$(eval $(call kpi_objects,ppc,$(KPI_CC_I386),$(KPI_KH_I386),-isysroot $(KPI_SDK_I386) -mmacosx-version-min=10.4 -force_cpusubtype_ALL -msoft-float -static -mlong-branch))
 $(eval $(call kpi_objects,x86_64,$(KPI_CC_X86_64),$(KPI_KH_X86_64),-isysroot $(KPI_SDK_X86_64) -mmacosx-version-min=10.6 -DP9FS_UBC_MSYNC))
 
 # Objects before the libraries, as for the PowerPC builds.
 $(BUILD)/i386/Virtio9P: $(BUILD)/i386/objects
 	$(KPI_CC_I386) -arch i386 -isysroot $(KPI_SDK_I386) -static -nostdlib -r -o $@ $(BUILD)/i386/*.o \
+		-lkmodc++ -lkmod -lcc_kext
+
+$(BUILD)/ppc/Virtio9P: $(BUILD)/ppc/objects
+	$(KPI_CC_I386) -arch ppc -isysroot $(KPI_SDK_I386) -static -nostdlib -r -o $@ $(BUILD)/ppc/*.o \
 		-lkmodc++ -lkmod -lcc_kext
 
 $(BUILD)/x86_64/Virtio9P: $(BUILD)/x86_64/objects
@@ -143,13 +151,13 @@ $(BUILD)/x86_64/Virtio9P: $(BUILD)/x86_64/objects
 # and which Tiger has for x86_64 too (it runs that slice on a 64-bit CPU); 10.15 runs no other.
 $(BUILD)/mount_9p: mount_9p.c p9fs_args.h
 	mkdir -p $(BUILD)
-	$(KPI_CC_I386) -arch i386 -arch x86_64 -isysroot $(KPI_SDK_I386) -mmacosx-version-min=10.4 -O2 -Wall \
+	$(KPI_CC_I386) -arch ppc -arch i386 -arch x86_64 -isysroot $(KPI_SDK_I386) -mmacosx-version-min=10.4 -O2 -Wall \
 		-o $@ mount_9p.c
 
-$(BUILD)/Virtio9P.kext: $(BUILD)/i386/Virtio9P $(BUILD)/x86_64/Virtio9P Info.plist.in libraries-kpi.xml
+$(BUILD)/Virtio9P.kext: $(BUILD)/ppc/Virtio9P $(BUILD)/i386/Virtio9P $(BUILD)/x86_64/Virtio9P Info.plist.in libraries-kpi.xml
 	rm -rf $@
 	mkdir -p $@/Contents/MacOS
-	lipo -create -output $@/Contents/MacOS/Virtio9P $(BUILD)/i386/Virtio9P $(BUILD)/x86_64/Virtio9P
+	lipo -create -output $@/Contents/MacOS/Virtio9P $(BUILD)/ppc/Virtio9P $(BUILD)/i386/Virtio9P $(BUILD)/x86_64/Virtio9P
 	perl -pe 's/\@VERSION\@/$(VERSION)/g; if (/\@LIBRARIES\@/) { open(L, "libraries-kpi.xml") or die; local $$/; $$_ = <L>; }' Info.plist.in | perl -0pe 's/[ \t]*<!--.*?-->\n?//gs' > $@/Contents/Info.plist
 endif
 
