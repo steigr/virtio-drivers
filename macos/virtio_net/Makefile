@@ -4,11 +4,11 @@
 #
 #   make ABI=gcc2   on 10.1 with the December 2001 tools (GCC 2.95): for 10.0 and 10.1, PowerPC
 #   make ABI=gcc3   on 10.2 with the December 2002 tools (GCC 3):    for 10.2 and 10.3, PowerPC
-#   make ABI=kpi    on 10.6 with Xcode 3.2.6:                       for 10.4 to 10.15, Intel
+#   make ABI=kpi    on 10.6 with Xcode 3.2.6:                       for 10.4 to 10.15, Intel, and 10.4 and 10.5, PowerPC
 #
 # Leaves build/<ABI>/VirtioNet.kext; `make ABI=kpi intel` also the two Intel bundles, build/intel.
 
-VERSION ?= 0.2.2
+VERSION ?= 0.2.3
 ABI     ?= gcc2
 
 # As for VirtioConsole, the GCC 2.95 build must see 10.0's Kernel.framework and kmod libraries,
@@ -69,6 +69,18 @@ build/kpi/VirtioNet.i386: $(KPI_SRCS) VirtioNet.h
 	$(KPI_CC_I386) -arch i386 -isysroot $(KPI_SDK_I386) -static -nostdlib -r -o $@ \
 	   build/kpi/VirtioNet_info.i386.o build/kpi/VirtioNet.i386.o -lkmodc++ -lkmod -lcc_kext
 
+# ppc, the same GCC 4.0 and universal 10.4u SDK: PowerPC 10.4 and 10.5, whose kernels export the KPI.
+# 10.5's has no m_mtod any more, which the PowerPC builds above use ("Undefined symbols: _m_mtod",
+# the gcc3 build on an installed PowerPC 10.5, 2026-11-22).
+build/kpi/VirtioNet.ppc: $(KPI_SRCS) VirtioNet.h
+	mkdir -p build/kpi
+	$(KPI_CC_I386) -arch ppc -mmacosx-version-min=10.4 -mlong-branch $(KPI_CXXFLAGS) -I$(KPI_SDK_I386)/System/Library/Frameworks/Kernel.framework/Headers \
+	   -c VirtioNet.cpp -o build/kpi/VirtioNet.ppc.o
+	$(KPI_CC_I386) -arch ppc -mmacosx-version-min=10.4 -mlong-branch $(KPI_CFLAGS) -I$(KPI_SDK_I386)/System/Library/Frameworks/Kernel.framework/Headers \
+	   -c VirtioNet_info.c -o build/kpi/VirtioNet_info.ppc.o
+	$(KPI_CC_I386) -arch ppc -isysroot $(KPI_SDK_I386) -static -nostdlib -r -o $@ \
+	   build/kpi/VirtioNet_info.ppc.o build/kpi/VirtioNet.ppc.o -lkmodc++ -lkmod -lcc_kext
+
 build/kpi/VirtioNet.x86_64: $(KPI_SRCS) VirtioNet.h
 	mkdir -p build/kpi
 	$(KPI_CC_X86_64) -arch x86_64 -mmacosx-version-min=10.6 -mkernel $(KPI_CXXFLAGS) -I$(KPI_SDK_X86_64)/System/Library/Frameworks/Kernel.framework/Headers \
@@ -78,11 +90,11 @@ build/kpi/VirtioNet.x86_64: $(KPI_SRCS) VirtioNet.h
 	$(KPI_CC_X86_64) -arch x86_64 -isysroot $(KPI_SDK_X86_64) -mmacosx-version-min=10.6 -Xlinker -kext -nostdlib -o $@ \
 	   build/kpi/VirtioNet_info.x86_64.o build/kpi/VirtioNet.x86_64.o -lkmodc++ -lkmod -lcc_kext
 
-build/kpi/VirtioNet: build/kpi/VirtioNet.i386 build/kpi/VirtioNet.x86_64
-	lipo -create -output $@ build/kpi/VirtioNet.i386 build/kpi/VirtioNet.x86_64
+build/kpi/VirtioNet: build/kpi/VirtioNet.ppc build/kpi/VirtioNet.i386 build/kpi/VirtioNet.x86_64
+	lipo -create -output $@ build/kpi/VirtioNet.ppc build/kpi/VirtioNet.i386 build/kpi/VirtioNet.x86_64
 
 # What the Intel releases are given, by the oldest release each serves: 10.6/ the universal kext,
-# 10.4/ its i386 slice alone. 10.5 refuses the universal one -- its kextload says "Executable file
+# 10.4/ its i386 and ppc slices (the ppc one for PowerPC 10.4 and 10.5). 10.5 refuses the universal one -- its kextload says "Executable file
 # doesn't contain kernel extension code" of a binary whose x86_64 slice is a kext bundle, a file
 # type it does not know (live, 10.5.8, 2026-10-10), and loads the thinned one -- while 10.6 and
 # later need that slice. 10.4's tools pass over it, but are given the same as 10.5.
@@ -92,7 +104,7 @@ intel: $(KEXT)
 	mkdir -p build/intel/10.4 build/intel/10.6
 	cp -R $(KEXT) build/intel/10.6/
 	cp -R $(KEXT) build/intel/10.4/
-	lipo -thin i386 -output build/intel/10.4/VirtioNet.kext/Contents/MacOS/VirtioNet $(KEXT)/Contents/MacOS/VirtioNet
+	lipo -remove x86_64 -output build/intel/10.4/VirtioNet.kext/Contents/MacOS/VirtioNet $(KEXT)/Contents/MacOS/VirtioNet
 
 ifneq ($(ABI),kpi)
 $(BUILD)/VirtioNet.o: VirtioNet.cpp VirtioNet.h
